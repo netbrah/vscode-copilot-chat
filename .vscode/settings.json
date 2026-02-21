@@ -1,4 +1,5 @@
 {
+    "extensions.experimental.allowProposedApi": true,
 	"files.trimTrailingWhitespace": true,
 	"[typescript]": {
 		"editor.insertSpaces": false,
@@ -153,5 +154,13 @@
 	"python-envs.pythonProjects": [],
 	"chat.tools.terminal.autoApprove": {
 		"npx vitest": true
+	},
+	"terminal.integrated.profiles.osx": {
+		"Codex": {
+			"path": "/bin/bash",
+			"args": ["-l", "-c", "codex"],
+			"icon": "sparkle",
+			"overrideName": true
+		}
 	}
 }
