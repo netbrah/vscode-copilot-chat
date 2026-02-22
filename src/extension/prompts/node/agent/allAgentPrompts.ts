@@ -3,8 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+// Personal prompt — must be first to win PromptRegistry resolution (matchesModel first-pass).
 import './anthropicPrompts';
 import './geminiPrompts';
+import './personalPrompts';
 import './vscModelPrompts';
 // vscModelPrompts must be imported before gpt5Prompt to ensure VSC model prompt resolvers are registered first.
 import './openai/defaultOpenAIPrompt';
@@ -17,4 +19,3 @@ import './openai/gpt5Prompt';
 import './openai/hiddenModelJPrompt';
 import './xAIPrompts';
 import './zaiPrompts';
-

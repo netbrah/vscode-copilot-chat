@@ -95,7 +95,7 @@ class ToolSearchToolPrompt extends PromptElement<ToolSearchToolPromptProps> {
 	}
 }
 
-class DefaultAnthropicAgentPrompt extends PromptElement<DefaultAgentPromptProps> {
+export class DefaultAnthropicAgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 	async render(state: void, sizing: PromptSizing) {
 		const tools = detectToolCapabilities(this.props.availableTools);
 
@@ -186,7 +186,7 @@ class DefaultAnthropicAgentPrompt extends PromptElement<DefaultAgentPromptProps>
 	}
 }
 
-class Claude45DefaultPrompt extends PromptElement<DefaultAgentPromptProps> {
+export class Claude45DefaultPrompt extends PromptElement<DefaultAgentPromptProps> {
 	constructor(
 		props: PromptElementProps<DefaultAgentPromptProps>,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
@@ -301,7 +301,7 @@ class Claude45DefaultPrompt extends PromptElement<DefaultAgentPromptProps> {
 	}
 }
 
-class Claude46DefaultPrompt extends PromptElement<DefaultAgentPromptProps> {
+export class Claude46DefaultPrompt extends PromptElement<DefaultAgentPromptProps> {
 	constructor(
 		props: PromptElementProps<DefaultAgentPromptProps>,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
@@ -469,7 +469,7 @@ class AnthropicPromptResolver implements IAgentPrompt {
 	}
 }
 
-class AnthropicReminderInstructions extends PromptElement<ReminderInstructionsProps> {
+export class AnthropicReminderInstructions extends PromptElement<ReminderInstructionsProps> {
 	constructor(
 		props: PromptElementProps<ReminderInstructionsProps>,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
