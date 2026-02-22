@@ -50,6 +50,11 @@ export interface ChatToolCallsProps extends BasePromptElementProps {
 	readonly toolCallMode?: CopilotToolMode;
 	readonly enableCacheBreakpoints?: boolean;
 	readonly truncateAt?: number;
+	/**
+	 * When set, historical (old-turn) tool results use this tighter token limit
+	 * instead of `truncateAt`. This reduces context accumulation from stale results.
+	 */
+	readonly historicalTruncateAt?: number;
 }
 
 const MAX_INPUT_VALIDATION_RETRIES = 5;
@@ -133,6 +138,10 @@ export class ChatToolCalls extends PromptElement<ChatToolCallsProps, void> {
 		// older tool calls.
 		const reserve1N = (1 / (total * 4)) / fixedNameToolCalls.length;
 		// todo@connor4312: historical tool calls don't need to reserve and can all be flexed together
+		// Use tighter truncation for historical tool results to reduce context accumulation
+		const effectiveTruncateAt = this.props.isHistorical && this.props.historicalTruncateAt
+			? Math.min(this.props.historicalTruncateAt, this.props.truncateAt ?? Infinity)
+			: this.props.truncateAt;
 		for (const [i, toolCall] of fixedNameToolCalls.entries()) {
 			const KeepWith = assistantToolCalls[i].keepWith;
 			children.push(
@@ -147,7 +156,7 @@ export class ChatToolCalls extends PromptElement<ChatToolCallsProps, void> {
 						toolCallMode: this.props.toolCallMode ?? CopilotToolMode.PartialContext,
 						isLast: !this.props.isHistorical && i === fixedNameToolCalls.length - 1 && index === total - 1,
 						enableCacheBreakpoints: this.props.enableCacheBreakpoints ?? false,
-						truncateAt: this.props.truncateAt,
+						truncateAt: effectiveTruncateAt,
 						sessionId: this.props.promptContext.request?.sessionId,
 						token: token ?? CancellationToken.None,
 					})}

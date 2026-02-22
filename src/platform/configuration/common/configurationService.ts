@@ -657,6 +657,26 @@ export namespace ConfigKey {
 		export const SummarizeAgentConversationHistoryThreshold = defineAndMigrateSetting<number | undefined>('chat.advanced.summarizeAgentConversationHistoryThreshold', 'chat.summarizeAgentConversationHistoryThreshold', undefined);
 		export const AgentHistorySummarizationMode = defineAndMigrateSetting<string | undefined>('chat.advanced.agentHistorySummarizationMode', 'chat.agentHistorySummarizationMode', undefined);
 		export const UseResponsesApiTruncation = defineAndMigrateSetting<boolean | undefined>('chat.advanced.useResponsesApiTruncation', 'chat.useResponsesApiTruncation', false);
+		/**
+		 * Maximum tokens for historical (non-current-turn) tool results.
+		 * When set, old tool results are aggressively truncated to this limit
+		 * to reduce context accumulation rate. Defaults to undefined (use standard truncation).
+		 */
+		export const HistoricalToolResultMaxTokens = defineAndMigrateSetting<number | undefined>('chat.advanced.historicalToolResultMaxTokens', 'chat.historicalToolResultMaxTokens', undefined);
+		/**
+		 * Safety buffer factor for the token budget threshold (0.0 - 1.0).
+		 * The budget used for prompt rendering is: (baseBudget - toolTokens) * factor.
+		 * Lower values provide more safety margin but waste context window.
+		 * Higher values use more of the context but risk budget-exceeded errors.
+		 * Defaults to undefined (uses the built-in 0.85 factor).
+		 */
+		export const CompactionSafetyFactor = defineAndMigrateSetting<number | undefined>('chat.advanced.compactionSafetyFactor', 'chat.compactionSafetyFactor', undefined);
+		/**
+		 * Custom instructions appended to the summarization prompt.
+		 * Use this to specify domain-specific context preservation rules,
+		 * e.g. "Always preserve function call chains, module paths, and iterator patterns."
+		 */
+		export const CompactionCustomInstructions = defineAndMigrateSetting<string | undefined>('chat.advanced.compactionCustomInstructions', 'chat.compactionCustomInstructions', undefined);
 		export const OmitBaseAgentInstructions = defineAndMigrateSetting<boolean>('chat.advanced.omitBaseAgentInstructions', 'chat.omitBaseAgentInstructions', false);
 		export const CLICustomAgentsEnabled = defineAndMigrateSetting<boolean | undefined>('chat.advanced.cli.customAgents.enabled', 'chat.cli.customAgents.enabled', true);
 		export const CLIPlanModeEnabled = defineAndMigrateSetting<boolean | undefined>('chat.advanced.cli.planMode.enabled', 'chat.cli.planMode.enabled', false);

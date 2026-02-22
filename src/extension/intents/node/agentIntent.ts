@@ -388,11 +388,12 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 		const summarizationEnabled = this.configurationService.getConfig(ConfigKey.SummarizeAgentConversationHistory) && this.prompt === AgentPrompt && !responsesCompactionContextManagementEnabled;
 		const backgroundCompactionEnabled = summarizationEnabled && this.configurationService.getExperimentBasedConfig(ConfigKey.BackgroundCompaction, this.expService);
 
-		const budgetThreshold = Math.floor((baseBudget - toolTokens) * 0.85);
+		const budgetSafetyFactor = this.configurationService.getConfig<number | undefined>(ConfigKey.Advanced.CompactionSafetyFactor) ?? 0.85;
+		const budgetThreshold = Math.floor((baseBudget - toolTokens) * budgetSafetyFactor);
 		const safeBudget = useTruncation ? Number.MAX_SAFE_INTEGER : budgetThreshold;
 		const endpoint = toolTokens > 0 ? this.endpoint.cloneWithTokenOverride(safeBudget) : this.endpoint;
 
-		this.logService.debug(`AgentIntent: rendering with budget=${safeBudget} (baseBudget: ${baseBudget}, toolTokens: ${toolTokens}), summarizationEnabled=${summarizationEnabled}`);
+		this.logService.debug(`AgentIntent: rendering with budget=${safeBudget} (baseBudget: ${baseBudget}, toolTokens: ${toolTokens}, safetyFactor=${budgetSafetyFactor}), summarizationEnabled=${summarizationEnabled}`);
 		let result: RenderPromptResult;
 		const props: AgentPromptProps = {
 			endpoint,

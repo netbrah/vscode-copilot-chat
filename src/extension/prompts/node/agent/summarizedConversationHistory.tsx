@@ -209,7 +209,17 @@ export interface NotebookSummaryProps extends BasePromptElementProps {
  * Conversation history rendered with tool calls and summaries.
  */
 class ConversationHistory extends PromptElement<SummarizedAgentHistoryProps> {
+	constructor(
+		props: SummarizedAgentHistoryProps,
+		@IConfigurationService private readonly configurationService: IConfigurationService,
+	) {
+		super(props);
+	}
+
 	override async render(state: void, sizing: PromptSizing) {
+		// Read historical tool result truncation limit from config
+		const historicalTruncateAt = this.configurationService.getConfig<number | undefined>(ConfigKey.Advanced.HistoricalToolResultMaxTokens);
+
 		// Iterate over the turns in reverse order until we find a turn with a tool call round that was summarized
 		const history: PromptElement[] = [];
 
@@ -326,6 +336,7 @@ class ConversationHistory extends PromptElement<SummarizedAgentHistoryProps> {
 				toolCallResults={toolCallResults}
 				isHistorical={!(toolCallResultInNextTurn && i === this.props.promptContext.history.length - 1)}
 				truncateAt={this.props.maxToolResultLength}
+				historicalTruncateAt={historicalTruncateAt}
 			/>);
 
 			history.push(...turnComponents.reverse());
@@ -458,7 +469,21 @@ class ConversationHistorySummarizer {
 		// Just a function for test to create props and call this
 		const propsInfo = this.instantiationService.createInstance(SummarizedConversationHistoryPropsBuilder).getProps(this.props);
 
-		const summaryPromise = this.getSummaryWithFallback(propsInfo);
+		// Merge config-based custom compaction instructions with any already-set instructions
+		const configInstructions = this.configurationService.getConfig<string | undefined>(ConfigKey.Advanced.CompactionCustomInstructions);
+		let effectivePropsInfo = propsInfo;
+		if (configInstructions) {
+			const existingInstructions = propsInfo.props.summarizationInstructions;
+			const mergedInstructions = existingInstructions
+				? existingInstructions + '\n\n' + configInstructions
+				: configInstructions;
+			effectivePropsInfo = {
+				...propsInfo,
+				props: { ...propsInfo.props, summarizationInstructions: mergedInstructions },
+			};
+		}
+
+		const summaryPromise = this.getSummaryWithFallback(effectivePropsInfo);
 		this.progress?.report(new ChatResponseProgressPart2(l10n.t('Compacting conversation...'), async () => {
 			try {
 				await summaryPromise;
