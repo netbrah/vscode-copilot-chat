@@ -139,14 +139,27 @@ else
 fi
 
 log "Version bump: ${UPSTREAM_VERSION} → ${PERSONAL_VERSION} (${BUILD_LABEL})"
+
+# Save original files for post-build cleanup
+cp package.json package.json.bak
+cp README.md README.md.bak 2>/dev/null || true
+cp CHANGELOG.md CHANGELOG.md.bak 2>/dev/null || true
+
+# Cleanup trap — restore originals after script exits (success or failure)
+cleanup_build_mutations() {
+	cd "$REPO_ROOT"
+	[[ -f package.json.bak ]] && mv package.json.bak package.json
+	[[ -f README.md.bak ]] && mv README.md.bak README.md
+	[[ -f CHANGELOG.md.bak ]] && mv CHANGELOG.md.bak CHANGELOG.md
+}
+trap cleanup_build_mutations EXIT
+
 node -e "
 	const fs = require('fs');
 	const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
 	pkg.version = '${PERSONAL_VERSION}';
 	pkg.displayName = 'GitHub Copilot Chat${DISPLAY_SUFFIX}';
-	if ('${DISPLAY_SUFFIX}') {
-		pkg.description = pkg.description + ' | branch: ${BUILD_LABEL} | built: ${BUILD_DATE}';
-	}
+	pkg.description = 'AI chat features powered by Copilot | ${BUILD_LABEL} | built: ${BUILD_DATE}';
 	fs.writeFileSync('package.json', JSON.stringify(pkg, null, '\t') + '\n');
 "
 

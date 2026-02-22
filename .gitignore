@@ -11,6 +11,9 @@ dist-sourcemaps/
 # stores wasm and other build files
 .build
 
+# build-and-install.sh backup files (restored by EXIT trap)
+*.bak
+
 # created by python scripts
 __pycache__/
 .venv*
