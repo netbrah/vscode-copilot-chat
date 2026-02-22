@@ -73,9 +73,30 @@ fail() { echo "✗ $*" >&2; exit 1; }
 cd "$REPO_ROOT"
 
 if $DO_PULL; then
-	log "Pulling latest from origin ($(git remote get-url origin))..."
-	git pull --ff-only origin "$(git branch --show-current)" || fail "git pull failed — resolve conflicts first"
-	log "Pull complete."
+	CURRENT_PULL_BRANCH=$(git branch --show-current)
+
+	# Strategy: always sync from upstream (Microsoft) main, then rebase
+	# local branch on top. This keeps our custom commits cleanly stacked.
+	# If upstream remote doesn't exist, fall back to origin.
+	if git remote get-url upstream &>/dev/null; then
+		log "Fetching latest from upstream ($(git remote get-url upstream))..."
+		git fetch upstream main || fail "git fetch upstream failed"
+
+		if [[ "$CURRENT_PULL_BRANCH" == "main" ]]; then
+			# On main: fast-forward to upstream/main
+			git merge --ff-only upstream/main || fail "Cannot fast-forward main — resolve divergence first"
+		else
+			# On feature branch: rebase our commits onto upstream/main
+			# Auto-stash dirty working tree so rebase can proceed
+			log "Rebasing $CURRENT_PULL_BRANCH onto upstream/main..."
+			git rebase --autostash upstream/main || fail "Rebase failed — resolve conflicts with: git rebase --continue"
+		fi
+	else
+		# No upstream remote — try origin pull (original behavior)
+		log "Pulling latest from origin ($(git remote get-url origin))..."
+		git pull --ff-only origin "$CURRENT_PULL_BRANCH" || fail "git pull failed — resolve conflicts first"
+	fi
+	log "Sync complete."
 else
 	log "Skipping pull (--no-pull)."
 fi
