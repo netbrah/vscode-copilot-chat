@@ -19,7 +19,7 @@ import { ApplyPatchInstructions, DefaultAgentPromptProps, detectToolCapabilities
 import { FileLinkificationInstructions } from '../fileLinkificationInstructions';
 import { CopilotIdentityRulesConstructor, IAgentPrompt, PromptRegistry, ReminderInstructionsConstructor, SafetyRulesConstructor, SystemPrompt } from '../promptRegistry';
 
-class Gpt53CodexPrompt extends PromptElement<DefaultAgentPromptProps> {
+export class Gpt53CodexPrompt extends PromptElement<DefaultAgentPromptProps> {
 	constructor(
 		props: DefaultAgentPromptProps,
 		@IConfigurationService private readonly configurationService: IConfigurationService,

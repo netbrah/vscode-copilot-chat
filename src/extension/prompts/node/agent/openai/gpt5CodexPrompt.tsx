@@ -11,7 +11,7 @@ import { DefaultAgentPromptProps, detectToolCapabilities } from '../defaultAgent
 import { FileLinkificationInstructions } from '../fileLinkificationInstructions';
 import { IAgentPrompt, PromptRegistry, SystemPrompt } from '../promptRegistry';
 
-class CodexStyleGpt5CodexPrompt extends PromptElement<DefaultAgentPromptProps> {
+export class CodexStyleGpt5CodexPrompt extends PromptElement<DefaultAgentPromptProps> {
 	async render(state: void, sizing: PromptSizing) {
 		const tools = detectToolCapabilities(this.props.availableTools);
 		return <InstructionMessage>

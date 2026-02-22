@@ -4,9 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { BasePromptElementProps, PromptElement, PromptSizing } from '@vscode/prompt-tsx';
+import { isGpt52CodexFamily, isGpt52Family, isGpt53Codex, isGptCodexFamily } from '../../../../platform/endpoint/common/chatModelCapabilities';
 import { IChatEndpoint } from '../../../../platform/networking/common/networking';
 import { InstructionMessage } from '../base/instructionMessage';
 import { IPromptEndpoint } from '../base/promptRenderer';
+import { Gpt5SafetyRule } from '../base/safetyRules';
 import { Tag } from '../base/tag';
 import {
 	AnthropicReminderInstructions,
@@ -15,6 +17,12 @@ import {
 	DefaultAnthropicAgentPrompt,
 } from './anthropicPrompts';
 import { DefaultAgentPromptProps } from './defaultAgentInstructions';
+import { Gpt51CodexPrompt } from './openai/gpt51CodexPrompt';
+import { Gpt51Prompt, Gpt51ReminderInstructions } from './openai/gpt51Prompt';
+import { HiddenModelBPrompt, HiddenModelBReminderInstructions } from './openai/gpt52Prompt';
+import { Gpt53CodexPrompt, Gpt53CodexReminderInstructions } from './openai/gpt53CodexPrompt';
+import { CodexStyleGpt5CodexPrompt } from './openai/gpt5CodexPrompt';
+import { DefaultGpt5AgentPrompt, Gpt5ReminderInstructions } from './openai/gpt5Prompt';
 import {
 	CopilotIdentityRulesConstructor,
 	IAgentPrompt,
@@ -49,31 +57,13 @@ class PersonalCopilotIdentityRules extends PromptElement<BasePromptElementProps>
 }
 
 /**
- * Personal system prompt — wraps the MODEL-SPECIFIC stock prompt with a
- * domain-specific preamble for ONTAP C/C++ codebase work.
- *
- * Design decisions (source-verified 2026-02-21):
- *
- * 1. Uses InstructionMessage (renders as SystemMessage for Claude models).
- * 2. Delegates to the correct model-specific prompt (Claude46/45/Sonnet4),
- *    preserving all model-specific sections (securityRequirements, taskTracking, etc.).
- * 3. Preamble renders BEFORE the stock prompt — earlier = higher salience.
+ * Shared ONTAP preamble — the domain-specific operating context injected
+ * BEFORE the stock system prompt for higher salience. Reused by both
+ * Claude and OpenAI model families.
  */
-class PersonalSystemPrompt extends PromptElement<DefaultAgentPromptProps> {
-	async render(_state: void, sizing: PromptSizing) {
-		const endpoint = sizing.endpoint as IChatEndpoint | undefined;
-		const model = endpoint?.model ?? '';
-
-		let StockPrompt: SystemPrompt;
-		if (model === 'claude-sonnet-4' || model === 'claude-sonnet-4-20250514') {
-			StockPrompt = DefaultAnthropicAgentPrompt;
-		} else if (model.includes('4-5') || model.includes('4.5')) {
-			StockPrompt = Claude45DefaultPrompt;
-		} else {
-			StockPrompt = Claude46DefaultPrompt;
-		}
-
-		return <>
+class OntapPreamble extends PromptElement<BasePromptElementProps> {
+	render() {
+		return (
 			<InstructionMessage>
 				<Tag name='personalOperatingContext'>
 					{'## Domain: ONTAP C/C++ Codebase (100K+ files)'}<br />
@@ -111,31 +101,129 @@ class PersonalSystemPrompt extends PromptElement<DefaultAgentPromptProps> {
 					{'4. **Synthesize results.** After the trace completes, provide a structured summary: call chain, files involved, key decision points (conditionals, dispatchers), and any unresolved symbols.'}<br />
 				</Tag>
 			</InstructionMessage>
+		);
+	}
+}
+
+// ─── Stock prompt selection helpers ────────────────────────────────────────
+
+function resolveClaudeStockPrompt(model: string): SystemPrompt {
+	if (model === 'claude-sonnet-4' || model === 'claude-sonnet-4-20250514') {
+		return DefaultAnthropicAgentPrompt;
+	} else if (model.includes('4-5') || model.includes('4.5')) {
+		return Claude45DefaultPrompt;
+	}
+	return Claude46DefaultPrompt;
+}
+
+function resolveOpenAIStockPrompt(endpoint: IChatEndpoint): SystemPrompt {
+	const family = endpoint.family;
+
+	if (isGpt52Family(family)) {
+		return HiddenModelBPrompt;
+	}
+	if (isGpt53Codex(family)) {
+		return Gpt53CodexPrompt;
+	}
+	if ((family.startsWith('gpt-5.1') && family.includes('-codex')) || isGpt52CodexFamily(family)) {
+		return Gpt51CodexPrompt;
+	}
+	if (family === 'gpt-5-codex') {
+		return CodexStyleGpt5CodexPrompt;
+	}
+	if (family.startsWith('gpt-5.1')) {
+		return Gpt51Prompt;
+	}
+	// gpt-5, gpt-5-mini, or anything else GPT5+
+	return DefaultGpt5AgentPrompt;
+}
+
+function resolveOpenAIReminderInstructions(endpoint: IChatEndpoint): ReminderInstructionsConstructor | undefined {
+	const family = endpoint.family;
+
+	if (isGpt52Family(family)) {
+		return HiddenModelBReminderInstructions;
+	}
+	if (isGpt53Codex(family)) {
+		return Gpt53CodexReminderInstructions;
+	}
+	if (isGptCodexFamily(family)) {
+		// gpt-5-codex, gpt-5.1-codex, gpt-5.2-codex — no model-specific reminder
+		return undefined;
+	}
+	if (family.startsWith('gpt-5.1')) {
+		return Gpt51ReminderInstructions;
+	}
+	// gpt-5, gpt-5-mini
+	return Gpt5ReminderInstructions;
+}
+
+// ─── Personal system prompts ──────────────────────────────────────────────
+
+/**
+ * Personal system prompt — wraps the MODEL-SPECIFIC stock prompt with a
+ * domain-specific preamble for ONTAP C/C++ codebase work.
+ *
+ * Design decisions (source-verified 2026-02-21):
+ *
+ * 1. Uses InstructionMessage (renders as SystemMessage for Claude models).
+ * 2. Delegates to the correct model-specific prompt (Claude / GPT / Codex),
+ *    preserving all model-specific sections (securityRequirements, taskTracking, etc.).
+ * 3. Preamble renders BEFORE the stock prompt — earlier = higher salience.
+ */
+class PersonalSystemPrompt extends PromptElement<DefaultAgentPromptProps> {
+	async render(_state: void, sizing: PromptSizing) {
+		const endpoint = sizing.endpoint as IChatEndpoint | undefined;
+		if (!endpoint) {
+			return <Claude46DefaultPrompt {...this.props} />;
+		}
+
+		const family = endpoint.family;
+		let StockPrompt: SystemPrompt;
+
+		if (family.startsWith('claude') || family.startsWith('Anthropic')) {
+			StockPrompt = resolveClaudeStockPrompt(endpoint.model ?? '');
+		} else {
+			StockPrompt = resolveOpenAIStockPrompt(endpoint);
+		}
+
+		return <>
+			<OntapPreamble />
 			<StockPrompt {...this.props} />
 		</>;
 	}
 }
 
+// ─── Resolver ─────────────────────────────────────────────────────────────
+
 /**
- * Personal agent prompt resolver — scoped to Claude/Anthropic models only.
+ * Personal agent prompt resolver — covers Claude AND all GPT-5+ models.
  *
- * Uses matchesModel (first-pass resolution) checking for Claude family,
- * which wins over AnthropicPromptResolver's familyPrefixes (second-pass).
- * Non-Claude models are unaffected — their resolvers continue to work normally.
+ * Registered with registerHighPriorityPrompt so it wins first-pass
+ * resolution over the stock per-model resolvers.
+ *
+ * For each model family it delegates to the correct stock system prompt,
+ * stock reminder instructions, and stock safety rules — only the identity
+ * rules and ONTAP preamble are customized.
  */
 class PersonalAgentPrompt implements IAgentPrompt {
 	static readonly familyPrefixes: readonly string[] = [];
 
 	static matchesModel(endpoint: IChatEndpoint): boolean {
-		return endpoint.family.startsWith('claude') || endpoint.family.startsWith('Anthropic');
+		return endpoint.family.startsWith('claude')
+			|| endpoint.family.startsWith('Anthropic')
+			|| endpoint.family.startsWith('gpt-5');
 	}
 
 	resolveSystemPrompt(_endpoint: IChatEndpoint): SystemPrompt {
 		return PersonalSystemPrompt;
 	}
 
-	resolveReminderInstructions(_endpoint: IChatEndpoint): ReminderInstructionsConstructor | undefined {
-		return AnthropicReminderInstructions;
+	resolveReminderInstructions(endpoint: IChatEndpoint): ReminderInstructionsConstructor | undefined {
+		if (endpoint.family.startsWith('claude') || endpoint.family.startsWith('Anthropic')) {
+			return AnthropicReminderInstructions;
+		}
+		return resolveOpenAIReminderInstructions(endpoint);
 	}
 
 	resolveToolReferencesHint(_endpoint: IChatEndpoint): ToolReferencesHintConstructor | undefined {
@@ -146,8 +234,12 @@ class PersonalAgentPrompt implements IAgentPrompt {
 		return PersonalCopilotIdentityRules;
 	}
 
-	resolveSafetyRules(_endpoint: IChatEndpoint): SafetyRulesConstructor | undefined {
-		return undefined;
+	resolveSafetyRules(endpoint: IChatEndpoint): SafetyRulesConstructor | undefined {
+		if (endpoint.family.startsWith('claude') || endpoint.family.startsWith('Anthropic')) {
+			return undefined; // Claude uses default SafetyRules
+		}
+		// All GPT-5+ models use Gpt5SafetyRule
+		return Gpt5SafetyRule;
 	}
 
 	resolveUserQueryTagName(_endpoint: IChatEndpoint): string | undefined {
@@ -155,4 +247,4 @@ class PersonalAgentPrompt implements IAgentPrompt {
 	}
 }
 
-PromptRegistry.registerPrompt(PersonalAgentPrompt);
+PromptRegistry.registerHighPriorityPrompt(PersonalAgentPrompt);

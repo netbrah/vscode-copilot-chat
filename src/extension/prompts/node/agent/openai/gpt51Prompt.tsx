@@ -17,7 +17,7 @@ import { ApplyPatchInstructions, DefaultAgentPromptProps, detectToolCapabilities
 import { FileLinkificationInstructions } from '../fileLinkificationInstructions';
 import { CopilotIdentityRulesConstructor, IAgentPrompt, PromptRegistry, ReminderInstructionsConstructor, SafetyRulesConstructor, SystemPrompt } from '../promptRegistry';
 
-class Gpt51Prompt extends PromptElement<DefaultAgentPromptProps> {
+export class Gpt51Prompt extends PromptElement<DefaultAgentPromptProps> {
 	async render(state: void, sizing: PromptSizing) {
 		const tools = detectToolCapabilities(this.props.availableTools);
 		return <InstructionMessage>

@@ -18,7 +18,7 @@ import { FileLinkificationInstructions } from '../fileLinkificationInstructions'
 import { CopilotIdentityRulesConstructor, IAgentPrompt, PromptRegistry, ReminderInstructionsConstructor, SafetyRulesConstructor, SystemPrompt, ToolReferencesHintConstructor } from '../promptRegistry';
 import { Gpt51ReminderInstructions } from './gpt51Prompt';
 
-class DefaultGpt5AgentPrompt extends PromptElement<DefaultAgentPromptProps> {
+export class DefaultGpt5AgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 	async render(state: void, sizing: PromptSizing) {
 		const tools = detectToolCapabilities(this.props.availableTools);
 		return <InstructionMessage>
@@ -275,7 +275,7 @@ class Gpt5ToolReferencesHint extends PromptElement<ToolReferencesHintProps> {
 	}
 }
 
-class Gpt5ReminderInstructions extends PromptElement<ReminderInstructionsProps> {
+export class Gpt5ReminderInstructions extends PromptElement<ReminderInstructionsProps> {
 	async render(state: void, sizing: PromptSizing) {
 		const isGpt5Mini = this.props.endpoint.family === 'gpt-5-mini';
 		return <>

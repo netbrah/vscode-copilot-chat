@@ -64,6 +64,20 @@ export const PromptRegistry = new class {
 		}
 	}
 
+	/**
+	 * Register a prompt with highest priority — it will be checked before
+	 * any previously-registered matchesModel resolvers.
+	 */
+	registerHighPriorityPrompt(prompt: IAgentPromptCtor): void {
+		if (prompt.matchesModel) {
+			this.promptsWithMatcher.unshift(prompt as PromptWithMatcher);
+		}
+
+		for (const prefix of prompt.familyPrefixes) {
+			this.familyPrefixList.unshift({ prefix, prompt });
+		}
+	}
+
 	private async getPromptResolver(
 		endpoint: IChatEndpoint
 	): Promise<IAgentPromptCtor | undefined> {
