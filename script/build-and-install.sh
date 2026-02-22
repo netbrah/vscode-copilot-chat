@@ -199,7 +199,7 @@ log "Packaging VSIX..."
 # Clean old VSIX files
 rm -f "$REPO_ROOT"/copilot-chat-*.vsix
 
-npx @vscode/vsce package --no-dependencies 2>&1 | tail -5
+npx @vscode/vsce package 2>&1 | tail -5
 
 # Find the freshly built VSIX
 VSIX_FILE=$(ls -t "$REPO_ROOT"/copilot-chat-*.vsix 2>/dev/null | head -1)
