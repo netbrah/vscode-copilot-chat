@@ -11,9 +11,11 @@
 # this machine — the fork carries only the structural hooks.
 #
 # Usage:
-#   ./script/build-and-install.sh            # default: pull + build + install
-#   ./script/build-and-install.sh --no-pull  # skip git pull (build from working tree)
-#   ./script/build-and-install.sh --no-install  # build only, don't install
+#   ./script/build-and-install.sh              # default: pull + build + install (local only)
+#   ./script/build-and-install.sh --no-pull    # skip git pull (build from working tree)
+#   ./script/build-and-install.sh --no-install # build only, don't install anywhere
+#   ./script/build-and-install.sh --remote     # also deploy to remote SSH host
+#   ./script/build-and-install.sh --remote-only # deploy existing VSIX to remote (no build)
 # ──────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -32,6 +34,11 @@ EXTENSION_ID="GitHub.copilot-chat"
 # Example: upstream 0.38.0 → personal 1.38.2026022100
 PERSONAL_MAJOR=1
 
+# Remote SSH deploy config (matches update_mastra.sh pattern)
+REMOTE_SSH_KEY="$HOME/.ssh/id_ed25519_mac2"
+REMOTE_HOST="palanisd@172.29.61.251"
+REMOTE_EXT_DIR="~/.vscode-server-insiders/extensions"
+
 # Detect VS Code binary (prefer Insiders)
 if command -v code-insiders &>/dev/null; then
 	VSCODE_CLI="code-insiders"
@@ -49,13 +56,17 @@ fi
 # ── Parse flags ──────────────────────────────────────────────────────
 DO_PULL=true
 DO_INSTALL=true
+DO_REMOTE=false
+REMOTE_ONLY=false
 
 for arg in "$@"; do
 	case "$arg" in
-		--no-pull)    DO_PULL=false ;;
-		--no-install) DO_INSTALL=false ;;
+		--no-pull)     DO_PULL=false ;;
+		--no-install)  DO_INSTALL=false ;;
+		--remote)      DO_REMOTE=true ;;
+		--remote-only) REMOTE_ONLY=true; DO_PULL=false; DO_INSTALL=false ;;
 		--help|-h)
-			echo "Usage: $0 [--no-pull] [--no-install]"
+			echo "Usage: $0 [--no-pull] [--no-install] [--remote] [--remote-only]"
 			exit 0
 			;;
 		*)
@@ -69,8 +80,25 @@ done
 log()  { echo "▸ $*"; }
 fail() { echo "✗ $*" >&2; exit 1; }
 
+# ── Remote-only shortcut ────────────────────────────────────────────
+# Skip the entire build pipeline — just find the latest VSIX and deploy it.
+if $REMOTE_ONLY; then
+	cd "$REPO_ROOT"
+	VSIX_FILE=$(ls -t "$REPO_ROOT"/copilot-chat-*.vsix 2>/dev/null | head -1)
+	if [[ -z "$VSIX_FILE" ]]; then
+		fail "No existing .vsix found. Run a full build first."
+	fi
+	PERSONAL_VERSION=$(echo "$(basename "$VSIX_FILE")" | sed 's/copilot-chat-//; s/\.vsix//')
+	UPSTREAM_VERSION=$(node -p "require('./package.json').version")
+	CURRENT_BRANCH=$(git branch --show-current)
+	BUILD_LABEL="remote-only"
+	log "Remote-only deploy: $(basename "$VSIX_FILE")"
+fi
+
 # ── Step 1: Pull latest ─────────────────────────────────────────────
 cd "$REPO_ROOT"
+
+if ! $REMOTE_ONLY; then
 
 if $DO_PULL; then
 	CURRENT_PULL_BRANCH=$(git branch --show-current)
@@ -221,11 +249,64 @@ else
 	log "Skipping install (--no-install). VSIX at: $VSIX_FILE"
 fi
 
+fi # end !REMOTE_ONLY
+
+# ── Step 7: Remote SSH deploy ────────────────────────────────────────
+# Pattern: SCP the VSIX, extract new version, symlink old → new.
+# The VS Code --remote CLI flag is unreliable without an active SSH session,
+# so we do it the update_mastra way: direct filesystem manipulation.
+#
+# IMPORTANT: We do NOT delete old extension directories immediately.
+# The extension host loads code into memory at startup, but worker threads
+# (e.g. tikTokenizerWorker.js) are spawned on-demand and resolve paths from
+# disk. Deleting the old dir mid-session breaks workers. Instead we:
+#   1. Extract the new version alongside the old
+#   2. Symlink old dir name → new dir (so worker path resolution still works)
+#   3. On next reload, VS Code picks up the new version cleanly
+if $DO_REMOTE || $REMOTE_ONLY; then
+	EXT_DIR_NAME="github.copilot-chat-${PERSONAL_VERSION}"
+
+	# Connectivity check (same pattern as update_mastra.sh)
+	if [[ ! -f "$REMOTE_SSH_KEY" ]]; then
+		log "Remote deploy: SSH key not found at $REMOTE_SSH_KEY — skipping."
+	elif ! ssh -i "$REMOTE_SSH_KEY" -o ConnectTimeout=10 -o BatchMode=yes "$REMOTE_HOST" 'echo ok' &>/dev/null; then
+		log "Remote deploy: Cannot reach $REMOTE_HOST — skipping (VPN?)."
+	else
+		log "Deploying to remote: $REMOTE_HOST"
+
+		# SCP the VSIX
+		scp -i "$REMOTE_SSH_KEY" "$VSIX_FILE" "$REMOTE_HOST:/tmp/copilot-chat-latest.vsix"
+
+		# Extract new version, symlink old dirs → new so workers don't break
+		ssh -i "$REMOTE_SSH_KEY" "$REMOTE_HOST" bash -lc "'
+			mkdir -p /tmp/copilot-extract \
+			&& cd /tmp/copilot-extract \
+			&& unzip -qo /tmp/copilot-chat-latest.vsix \
+			&& rm -rf $REMOTE_EXT_DIR/$EXT_DIR_NAME \
+			&& mv extension $REMOTE_EXT_DIR/$EXT_DIR_NAME \
+			&& for old_dir in $REMOTE_EXT_DIR/github.copilot-chat-*; do
+				if [ -d \"\$old_dir\" ] && [ \"\$(basename \"\$old_dir\")\" != \"$EXT_DIR_NAME\" ]; then
+					rm -rf \"\$old_dir\"
+					ln -sf \"$EXT_DIR_NAME\" \"\$old_dir\"
+				fi
+			done \
+			&& rm -rf /tmp/copilot-extract /tmp/copilot-chat-latest.vsix \
+			&& echo DONE
+		'"
+
+		log "Remote deploy complete. Running sessions preserved via symlink."
+		log "Reload SSH window to activate new version."
+	fi
+else
+	log "Skipping remote deploy (use --remote to enable)."
+fi
+
 echo ""
 echo "════════════════════════════════════════════════════"
 echo "  Version:  ${PERSONAL_VERSION} (upstream ${UPSTREAM_VERSION})"
 echo "  Branch:   ${CURRENT_BRANCH} (${BUILD_LABEL})"
 echo "  VSIX:     $(basename "$VSIX_FILE")"
 echo "  Built:    $(date '+%Y-%m-%d %H:%M:%S')"
-$DO_INSTALL && echo "  Restart VS Code Insiders to pick up changes."
+$DO_INSTALL && echo "  Local:    Restart VS Code Insiders to pick up changes."
+($DO_REMOTE || $REMOTE_ONLY) && echo "  Remote:   $REMOTE_HOST — reload SSH window to activate."
 echo "════════════════════════════════════════════════════"
