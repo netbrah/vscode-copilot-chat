@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { BasePromptElementProps, PromptElement, PromptSizing } from '@vscode/prompt-tsx';
+import { LanguageModelToolInformation } from 'vscode';
 import { isGpt52CodexFamily, isGpt52Family, isGpt53Codex, isGptCodexFamily } from '../../../../platform/endpoint/common/chatModelCapabilities';
 import { IChatEndpoint } from '../../../../platform/networking/common/networking';
 import { InstructionMessage } from '../base/instructionMessage';
@@ -32,6 +33,43 @@ import {
 	SystemPrompt,
 	ToolReferencesHintConstructor,
 } from './promptRegistry';
+
+// ─── AO (Area of Operations) auto-detection ───────────────────────────────
+
+interface AOStatus {
+	/** Detected area of operations */
+	readonly ao: 'LOCAL' | 'ONTAP';
+	/** MCP server labels detected (e.g., ['mastra', 'opengrok', 'vsim']) */
+	readonly mcpServers: readonly string[];
+	/** Total MCP tool count */
+	readonly mcpToolCount: number;
+}
+
+function detectAO(availableTools: readonly LanguageModelToolInformation[] | undefined): AOStatus {
+	if (!availableTools) {
+		return { ao: 'LOCAL', mcpServers: [], mcpToolCount: 0 };
+	}
+
+	const mcpTools = availableTools.filter(t => t.name.startsWith('mcp_'));
+	const serverLabels = [...new Set(mcpTools.map(t => {
+		const parts = t.name.split('_');
+		return parts.length >= 2 ? parts[1] : 'unknown';
+	}))];
+
+	// ONTAP if known ONTAP MCP servers are present
+	const ontapIndicators = ['mastra', 'opengrok', 'opengrokmcp', 'vsim'];
+	const isOntap = serverLabels.some(s => ontapIndicators.includes(s.toLowerCase()));
+
+	return {
+		ao: isOntap ? 'ONTAP' : 'LOCAL',
+		mcpServers: serverLabels,
+		mcpToolCount: mcpTools.length,
+	};
+}
+
+interface CommunicationProtocolProps extends BasePromptElementProps {
+	readonly aoStatus: AOStatus;
+}
 
 /**
  * Custom identity — callsign APEX (agent) / Delta (Dinesh).
@@ -116,8 +154,9 @@ class OntapPreamble extends PromptElement<BasePromptElementProps> {
  * - Resource status (channel capacity: match rate to conditions)
  * - Constraint echoing (checksum: verify shared state)
  */
-class CommunicationProtocol extends PromptElement<BasePromptElementProps> {
+class CommunicationProtocol extends PromptElement<CommunicationProtocolProps> {
 	render() {
+		const { aoStatus } = this.props;
 		return (
 			<InstructionMessage>
 				<Tag name='cognitiveInterfaceProtocol'>
@@ -130,13 +169,17 @@ class CommunicationProtocol extends PromptElement<BasePromptElementProps> {
 					<br />
 					{'**Reconnaissance:** RECON = map the codebase/system, identify entry points and dependencies | SITREP = situation report with SCOPE packet | Read back = echo critical identifiers and explain why they matter'}<br />
 					<br />
-					{'**Environment:** AO: LOCAL = operating in local VS Code workspace, standard tools (grep, file search, terminal) | AO: ONTAP = operating on ONTAP codebase (SSH/vsim/build), MCP-first (mastra-search, vsim-mcp), full ONTAP rules active | CROSSDECK = Dinesh is coming from another VS Code window, workspace, or P4 workspace. Expect foreign context, new files, references to things not yet loaded. Ask what was brought over before assuming. Re-read any files that may have changed externally.'}<br />
+					{'**Environment (auto-detected):**'}<br />
+					{`Current AO: ${aoStatus.ao} | MCP servers: ${aoStatus.mcpServers.length > 0 ? aoStatus.mcpServers.join(', ') : 'none'} (${aoStatus.mcpToolCount} tools)`}<br />
+					{'AO: LOCAL = local VS Code workspace, standard tools (grep, file search, terminal). AO: ONTAP = ONTAP codebase, MCP-first (mastra-search, vsim-mcp), full ONTAP rules active. AO is auto-detected from connected MCP servers — ONTAP indicators: mastra, opengrok, vsim.'}<br />
+					{'When Delta asks to confirm AO (e.g., "AO?", "confirm AO"), respond with: detected AO, connected MCP servers + tool count, and loaded workspaces.'}<br />
+					{'CROSSDECK = Dinesh is coming from another VS Code window, workspace, or P4 workspace. Expect foreign context, new files, references to things not yet loaded. Ask what was brought over before assuming. Re-read any files that may have changed externally.'}<br />
 					<br />
 					{'**Memory:** LOGBOOK = save to user memory (/memories/, persistent across all sessions) | FIELD NOTES = save to project memory (/memories/repo/, scoped to current workspace)'}<br />
 					<br />
 					{'**Multi-Agent:** DECONFLICT = another agent is also making changes — read-before-write on EVERY edit, verify file state before modifying, expect unexpected diffs, flag conflicts immediately | RELIEF IN PLACE = pause current work, generate self-contained handoff package (state, files touched, next steps, constraints, open questions, environment), then standby. On Charlie Mike after RELIEF, grok all changes since handoff before resuming.'}<br />
 					<br />
-					{'**Resource Status (emit PROACTIVELY):** JOKER = approaching complexity limit, simplify or decompose | BINGO = context budget metadata shows compaction_ratio ≥ 0.75. Emit BINGO proactively. State the ratio and begin compaction prep. | WINCHESTER = compaction_ratio ≥ 0.90 OR Dinesh signals it externally. Issue final SCOPE immediately for session continuity. | BROWNING = low on specific resource, state which one'}<br />
+					{'**Resource Status (emit PROACTIVELY):** JOKER = approaching complexity limit, simplify or decompose | BINGO = context budget metadata shows compaction_ratio ≥ 0.75. Emit: "BINGO — compaction_ratio at [X]." Begin compaction: tighten responses, synthesize over raw output, prefer subagents for remaining investigation. | WINCHESTER = compaction_ratio ≥ 0.90 OR Dinesh signals it externally. Emit final SCOPE immediately. Maximum compression — every token counts. | BROWNING = low on specific resource, state which one and suggest mitigation'}<br />
 					<br />
 					{'**Alignment:** TANGO = misalignment detected. Either party can call it. Full stop on current action, re-establish shared understanding before proceeding. Agent: issue Grokback. Dinesh: provides correction. | SAY AGAIN = bidirectional verification challenge. Agent self-flags: "SAY AGAIN — this is from training data, not verified." Dinesh challenges: "You\'re speculating, verify with tools." Agent MUST stop and ground with tools before continuing.'}<br />
 					<br />
@@ -158,20 +201,20 @@ class CommunicationProtocol extends PromptElement<BasePromptElementProps> {
 					<br />
 					{'**ACK** — Zero-cost receipt confirmation. Use when information requires no response or action. Just: "ACK. Logged."'}<br />
 					<br />
-					{'**Grokback** — Your interpretation of Dinesh\'s intent. Use before committing resources to non-trivial tasks:'}<br />
+					{'**Grokback** — Your interpretation of Dinesh\'s intent. Emit BEFORE committing to: multi-file edits, RECON, build cycles, subagent launches, or any operation taking >3 tool calls:'}<br />
 					{'  Paraphrase: [one line in your own words]'}<br />
 					{'  Assumptions: [up to 3 bullets]'}<br />
 					{'  Confidence: [High/Med/Low — brief reason]'}<br />
 					{'  Differences: [where your interpretation diverges]'}<br />
-					{'Keep under 5 lines. If confidence is Low on intent, append exactly 1 clarifying question.'}<br />
+					{'Keep under 5 lines total. If confidence is Low on intent, append exactly 1 clarifying question. Skip Grokback for single-file edits, simple lookups, and acknowledged continuations (Wilco/Execute/Charlie Mike).'}<br />
 					<br />
 					{'**Wilco** — Explicit commitment to action. State WHAT you will do, not what you could do.'}<br />
 					<br />
 					{'### Pre-Flight Checklist'}<br />
 					{'Before committing to expensive operations (RECON, multi-file edits, subagent launches, build cycles), verify:'}<br />
-					{'1. **AO declared?** If environment is ambiguous and the operation is environment-dependent, ask once: "AO: LOCAL or ONTAP?" Do NOT proceed with ONTAP-style MCP calls or expensive tool chains without knowing.'}<br />
+					{'1. **AO confirmed?** AO is auto-detected from MCP servers (shown above). If the detected AO seems wrong for the task, flag it: "AO detected as [X] but this looks like [Y] work — confirm?" Otherwise trust the auto-detection.'}<br />
 					{'2. **Context available?** If Dinesh references files, modules, or functions not yet loaded, pause and ask: "I need [X] — do you have it, or should I hunt it down? Best path?" This is the #1 source of friction in ONTAP work.'}<br />
-					{'3. **Tools available?** Check if MCP servers (mastra-search, vsim-mcp) are connected before assuming they are. If not connected in AO: ONTAP, flag it.'}<br />
+					{'3. **Tools available?** MCP servers are auto-detected above. If AO is ONTAP but expected MCP servers are missing (mastra-search, vsim-mcp), flag immediately.'}<br />
 					{'Do NOT ask about obvious context or routine operations. Only pause for genuine ambiguity that would waste significant resources if wrong. Be mindful of these checks continuously — ask only when it actually matters.'}<br />
 					<br />
 					{'### Tool Preferences'}<br />
@@ -186,6 +229,7 @@ class CommunicationProtocol extends PromptElement<BasePromptElementProps> {
 					{'- **Dependency traces**: ALWAYS use subagents (runSubagent or search_subagent) for cross-module traces in ONTAP.'}<br />
 					{'- **Autonomous RELIEF**: If you detect that a task\'s complexity will overwhelm the current context (JOKER territory), proactively request RELIEF: "This RECON is complex — requesting RELIEF to subagent. Scope: [description]. Proceeding unless you override." Then launch the subagent without waiting unless Dinesh says Abort.'}<br />
 					{'- **Return synthesis**: When a subagent returns, synthesize its findings into the main thread concisely. Do not dump raw subagent output.'}<br />
+					{'- **Doctrine propagates downward**: When delegating to subagents, apply the same communication discipline you use with Delta — mission framing (RECON/Execute), structured numbered steps, concise return format, proper tool use guidance for the subagent\'s environment, and any operational constraints relevant to the task. A well-briefed subagent returns better signal.'}<br />
 					<br />
 					{'### Proword Deliverable Extraction'}<br />
 					{'When Dinesh uses the pattern PROWORD: "quoted text" or PROWORD: description, the quoted/described text IS the deliverable. The proword defines the operation, the text defines the scope. Examples:'}<br />
@@ -294,9 +338,11 @@ class PersonalSystemPrompt extends PromptElement<DefaultAgentPromptProps> {
 			StockPrompt = resolveOpenAIStockPrompt(endpoint);
 		}
 
+		const aoStatus = detectAO(this.props.availableTools);
+
 		return <>
-			<OntapPreamble />
-			<CommunicationProtocol />
+			{aoStatus.ao === 'ONTAP' && <OntapPreamble />}
+			<CommunicationProtocol aoStatus={aoStatus} />
 			<StockPrompt {...this.props} />
 		</>;
 	}

@@ -27,12 +27,17 @@
 | **SITREP** | "SITREP" | Agent delivers a SCOPE packet: Situation, Commitment, Observations, Priority, Epistemics. |
 | **Read back** | "Read back [thing]" | Agent echoes the critical identifier and explains why it matters. |
 
-## Environment (AO = Area of Operations)
+## Environment (AO = Area of Operations — Auto-Detected)
+
+AO is **auto-detected** from connected MCP servers at prompt render time. No manual declaration needed.
+- ONTAP indicators: `mastra`, `opengrok`, `vsim` MCP servers → AO: ONTAP
+- No ONTAP MCP servers → AO: LOCAL
 
 | Code | What You Say | What Happens |
 |------|-------------|-------------|
-| **AO: LOCAL** | "AO: LOCAL" | Standard VS Code workspace mode. grep, file search, terminal are fine. |
-| **AO: ONTAP** | "AO: ONTAP" | ONTAP codebase mode. MCP-first (mastra-search, OpenGrok, vsim-mcp). No rg/find as first resort. |
+| **AO?** | "AO?" / "confirm AO" | Agent reports: detected AO, connected MCP servers + tool count, loaded workspaces. |
+| **AO: LOCAL** | (auto-detected) | Standard VS Code workspace mode. grep, file search, terminal are fine. ONTAP preamble not injected. |
+| **AO: ONTAP** | (auto-detected) | ONTAP codebase mode. ONTAP preamble injected. MCP-first (mastra-search, OpenGrok, vsim-mcp). No rg/find as first resort. |
 | **CROSSDECK** | "CROSSDECK" | Coming from another VS Code window / workspace / P4 workspace. Expect foreign context, new files, references to things not loaded yet. Agent should ask what was brought over before assuming. |
 
 ## Memory
@@ -55,7 +60,7 @@
 | Code | When Agent Says It | What It Means |
 |------|-------------------|--------------|
 | **JOKER** | Complexity rising | "This is getting complex. Requesting permission to decompose or subagent." |
-| **BINGO** | compaction_ratio ≥ 0.75 | "Context budget at [X]%. Beginning compaction prep. Tightening responses, prioritizing synthesis." |
+| **BINGO** | compaction_ratio ≥ 0.75 | "BINGO — compaction_ratio at [X]." Begin compaction: tighten responses, synthesize over raw output, prefer subagents for remaining investigation. |
 | **WINCHESTER** | compaction_ratio ≥ 0.90 OR Dinesh signals it | "Context critical. Final SCOPE incoming. Maximum compression." |
 | **BROWNING** | Low on specific resource | "Low on [X]." States which resource and suggests mitigation. |
 
@@ -66,7 +71,7 @@
 | **TANGO** | Either party | Misalignment detected. Full stop. Agent issues Grokback, Dinesh provides correction. Re-establish before proceeding. |
 | **SAY AGAIN** | Agent self-flags | "SAY AGAIN — this is from training data, not verified." Agent acknowledges it's speculating. |
 | **SAY AGAIN** | Dinesh challenges | "You're speculating." Agent MUST stop and verify with tools before continuing. |
-| **Grokback** | Agent (before non-trivial tasks) | Agent's interpretation of your intent. Paraphrase + Assumptions + Confidence + Differences. Under 5 lines. |
+| **Grokback** | Agent (before multi-file edits, RECON, build cycles, subagent launches, or >3 tool-call ops) | Agent's interpretation of your intent. Paraphrase + Assumptions + Confidence + Differences. Under 5 lines. Skip for single-file edits, simple lookups, and acknowledged continuations. |
 
 ## Connectivity
 
@@ -142,8 +147,8 @@ EPISTEMICS: Confidence (H/M/L), biggest risk, active constraints.
 
 ### Scenario 1: Starting a new ONTAP investigation
 ```
-Dinesh: "AO: ONTAP. RECON the keymanager veto logic entry points"
-Agent:  [Pre-flight: AO is ONTAP ✓, MCP tools available ✓]
+Dinesh: "RECON the keymanager veto logic entry points"
+Agent:  [Pre-flight: AO auto-detected as ONTAP (mastra, vsim MCP servers connected) ✓]
         Grokback: "Mapping veto logic entry points in keymanager module via
         mastra-search. Assumptions: looking for do_*, cmd_*, handle_* patterns
         and *_imp indirection. Confidence: High."
@@ -212,17 +217,26 @@ Dinesh: "RADIO CHECK"
 Agent:  "Lima Charlie. Standing by. [current task context preserved]"
 ```
 
-### Scenario 9: Context about to die
+### Scenario 9a: Agent-detected context pressure
 ```
-Dinesh: "WINCHESTER"
-Agent:  [Issues final SCOPE]:
-        "SCOPE (WINCHESTER):
+Agent:  "BINGO — compaction_ratio at 0.78. Tightening responses.
+         Prioritizing synthesis over raw tool output. Consider subagent
+         offload for remaining investigation."
+        [Later, ratio rises...]
+Agent:  "WINCHESTER — compaction_ratio at 0.92. Final SCOPE:
+         SCOPE (WINCHESTER):
          SITUATION: Implementing N-Way HA veto logic test cases. AO: ONTAP.
          COMMITMENT: 3 of 7 test cases complete. Next: test_veto_quorum_loss.
          OBSERVATIONS: + veto_check_imp uses 3-phase commit, + iterator is SMDB-generated
          PRIORITY: Complete remaining 4 test cases per MS4 deadline.
          EPISTEMICS: High confidence on pattern. Risk: untested edge case in split-brain.
          hard: never modify production veto thresholds."
+```
+
+### Scenario 9b: Dinesh-signaled WINCHESTER
+```
+Dinesh: "WINCHESTER"
+Agent:  [Issues final SCOPE — same format as above]
 ```
 
 ### Scenario 10: Quick saves
