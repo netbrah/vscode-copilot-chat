@@ -55,8 +55,8 @@
 | Code | When Agent Says It | What It Means |
 |------|-------------------|--------------|
 | **JOKER** | Complexity rising | "This is getting complex. Requesting permission to decompose or subagent." |
-| **BINGO** | Context tightening | "Context window getting tight. Beginning compaction. Preserving SCOPE + constraints." |
-| **WINCHESTER** | YOU say this — agent can't see context size | "Context about to compact." Agent issues final SCOPE for continuity. |
+| **BINGO** | compaction_ratio ≥ 0.75 | "Context budget at [X]%. Beginning compaction prep. Tightening responses, prioritizing synthesis." |
+| **WINCHESTER** | compaction_ratio ≥ 0.90 OR Dinesh signals it | "Context critical. Final SCOPE incoming. Maximum compression." |
 | **BROWNING** | Low on specific resource | "Low on [X]." States which resource and suggests mitigation. |
 
 ## Alignment & Verification
@@ -80,6 +80,40 @@
 |------|-------------|-------------|
 | **Pan-Pan** | "Pan-Pan" | Significant issue, recoverable. Agent escalates priority, focuses attention. |
 | **Mayday** | "Mayday" | System-breaking. Immediate full stop. All state preserved. |
+
+## Proword Deliverable Extraction
+
+When you use the pattern `PROWORD: "quoted text"` or `PROWORD: description`, the text IS the deliverable.
+The proword defines the operation. The text defines the scope.
+
+| Pattern | What Happens |
+|---------|--------------|
+| `RECON: "veto logic"` | Deliverable = RECON of veto logic |
+| `Execute: "context budget injection"` | Deliverable = implement context budget injection |
+| `LOGBOOK: "Claude handles macros better"` | Deliverable = save that fact to user memory |
+| `FIELD NOTES: "km_veto entry is in km_veto.c"` | Deliverable = save to project memory |
+
+Works with ALL prowords. Agent extracts the deliverable, matches it to the proword's behavior, and executes.
+
+---
+
+## Context Budget Awareness
+
+The agent now receives live context budget telemetry via a metadata comment in the system message:
+```
+<!-- context_budget: used/total tool_tokens: N safety_factor: N compaction_ratio: N summarized: yes/no -->
+```
+
+| compaction_ratio | Status | Agent Behavior |
+|-----------------|--------|----------------|
+| < 0.75 | **Green** | Operate normally |
+| ≥ 0.75 | **BINGO** | Emit proactively. Tighten responses, prioritize synthesis, consider subagent offload |
+| ≥ 0.90 | **WINCHESTER** | Emit final SCOPE immediately. Maximum compression. Every token counts |
+
+> BINGO/WINCHESTER are now **agent-detected** (not just Dinesh-signaled). The agent monitors compaction_ratio continuously.
+> Dinesh can still call WINCHESTER manually for situations the ratio doesn't capture.
+
+---
 
 ## Constraints
 

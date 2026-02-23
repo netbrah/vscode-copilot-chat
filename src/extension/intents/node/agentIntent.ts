@@ -54,6 +54,7 @@ import { ContributedToolName, ToolName } from '../../tools/common/toolNames';
 import { IToolsService } from '../../tools/common/toolsService';
 import { applyPatch5Description } from '../../tools/node/applyPatchTool';
 import { getAgentMaxRequests } from '../common/agentConfig';
+import { toTextPart } from '../../../platform/chat/common/globalStringUtils';
 import { addCacheBreakpoints } from './cacheBreakpoints';
 import { EditCodeIntent, EditCodeIntentInvocation, EditCodeIntentInvocationOptions, mergeMetadata, toNewChatReferences } from './editCodeIntent';
 
@@ -614,6 +615,18 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 		}
 
 		addCacheBreakpoints(result.messages);
+
+		if (this.configurationService.getConfig(ConfigKey.Advanced.InjectContextBudgetMetadata)) {
+			const systemMsg = result.messages.find(m => m.role === Raw.ChatRole.System);
+			if (systemMsg) {
+				const effectiveBudget = useTruncation ? baseBudget : budgetThreshold;
+				const compactionRatio = budgetThreshold > 0 ? (result.tokenCount / budgetThreshold).toFixed(2) : '0.00';
+				const summarized = summarizationEnabled && !!result.metadata.get(SummarizedConversationHistoryMetadata) ? 'yes' : 'no';
+				systemMsg.content.push(toTextPart(
+					`\n<!-- context_budget: ${result.tokenCount}/${effectiveBudget} tool_tokens: ${toolTokens} safety_factor: ${budgetSafetyFactor} compaction_ratio: ${compactionRatio} summarized: ${summarized} -->`
+				));
+			}
+		}
 
 		if (this.request.command === 'error') {
 			// Should trigger a 400
