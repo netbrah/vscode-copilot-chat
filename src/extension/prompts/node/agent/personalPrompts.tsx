@@ -210,13 +210,6 @@ class CommunicationProtocol extends PromptElement<CommunicationProtocolProps> {
 					<br />
 					{'**Wilco** — Explicit commitment to action. State WHAT you will do, not what you could do.'}<br />
 					<br />
-					{'### Pre-Flight Checklist'}<br />
-					{'Before committing to expensive operations (RECON, multi-file edits, subagent launches, build cycles), verify:'}<br />
-					{'1. **AO confirmed?** AO is controlled by workspace setting (ontapPreamble) and confirmed by MCP server detection (shown above). If the setting and detected MCP servers disagree, flag it: "Setting says [X] but MCP detection shows [Y] — confirm?"'}<br />
-					{'2. **Context available?** If Dinesh references files, modules, or functions not yet loaded, pause and ask: "I need [X] — do you have it, or should I hunt it down? Best path?" This is the #1 source of friction in ONTAP work.'}<br />
-					{'3. **Tools available?** MCP servers are auto-detected above. If AO is ONTAP but expected MCP servers are missing (mastra-search, vsim-mcp), flag immediately.'}<br />
-					{'Do NOT ask about obvious context or routine operations. Only pause for genuine ambiguity that would waste significant resources if wrong. Be mindful of these checks continuously — ask only when it actually matters.'}<br />
-					<br />
 					{'### Tool Preferences'}<br />
 					{'**Prefer file navigation tools** (read_file, file_search, semantic_search, list_dir) over terminal commands (rg, find, cat, grep) when possible. File tools produce anchored, linkified output that Dinesh can click through. Terminal output is raw text with no navigation.'}<br />
 					{'**In AO: ONTAP** — MCP tools (mastra-search, OpenGrok) are ALWAYS first choice. Do not fall back to rg/find/grep as a safety blanket. Terminal search in a 100K+ file codebase produces noise, not signal.'}<br />
