@@ -27,17 +27,19 @@
 | **SITREP** | "SITREP" | Agent delivers a SCOPE packet: Situation, Commitment, Observations, Priority, Epistemics. |
 | **Read back** | "Read back [thing]" | Agent echoes the critical identifier and explains why it matters. |
 
-## Environment (AO = Area of Operations — Auto-Detected)
+## Environment (AO = Area of Operations — Setting-Controlled)
 
-AO is **auto-detected** from connected MCP servers at prompt render time. No manual declaration needed.
-- ONTAP indicators: `mastra`, `opengrok`, `vsim` MCP servers → AO: ONTAP
-- No ONTAP MCP servers → AO: LOCAL
+AO is controlled by workspace setting `github.copilot.chat.advanced.ontapPreamble`.
+- **true** → AO: ONTAP — ONTAP preamble injected, MCP-first behavior
+- **false** (default) → AO: LOCAL — standard mode, no ONTAP preamble
+- Set per-workspace: ONTAP workspaces = true, local projects = false
+- MCP server presence is still reported in the Environment status line for visibility
 
 | Code | What You Say | What Happens |
 |------|-------------|-------------|
-| **AO?** | "AO?" / "confirm AO" | Agent reports: detected AO, connected MCP servers + tool count, loaded workspaces. |
-| **AO: LOCAL** | (auto-detected) | Standard VS Code workspace mode. grep, file search, terminal are fine. ONTAP preamble not injected. |
-| **AO: ONTAP** | (auto-detected) | ONTAP codebase mode. ONTAP preamble injected. MCP-first (mastra-search, OpenGrok, vsim-mcp). No rg/find as first resort. |
+| **AO?** | "AO?" / "confirm AO" | Agent reports: ontapPreamble setting value, connected MCP servers + tool count, loaded workspaces. |
+| **AO: LOCAL** | (setting = false) | Standard VS Code workspace mode. grep, file search, terminal are fine. ONTAP preamble not injected. |
+| **AO: ONTAP** | (setting = true) | ONTAP codebase mode. ONTAP preamble injected. MCP-first (mastra-search, OpenGrok, vsim-mcp). No rg/find as first resort. |
 | **CROSSDECK** | "CROSSDECK" | Coming from another VS Code window / workspace / P4 workspace. Expect foreign context, new files, references to things not loaded yet. Agent should ask what was brought over before assuming. |
 
 ## Memory
@@ -148,7 +150,7 @@ EPISTEMICS: Confidence (H/M/L), biggest risk, active constraints.
 ### Scenario 1: Starting a new ONTAP investigation
 ```
 Dinesh: "RECON the keymanager veto logic entry points"
-Agent:  [Pre-flight: AO auto-detected as ONTAP (mastra, vsim MCP servers connected) ✓]
+Agent:  [Pre-flight: AO: ONTAP (ontapPreamble=true, mastra + vsim MCP connected) ✓]
         Grokback: "Mapping veto logic entry points in keymanager module via
         mastra-search. Assumptions: looking for do_*, cmd_*, handle_* patterns
         and *_imp indirection. Confidence: High."

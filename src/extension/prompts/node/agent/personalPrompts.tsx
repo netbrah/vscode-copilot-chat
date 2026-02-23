@@ -5,6 +5,7 @@
 
 import { BasePromptElementProps, PromptElement, PromptSizing } from '@vscode/prompt-tsx';
 import { LanguageModelToolInformation } from 'vscode';
+import { ConfigKey, IConfigurationService } from '../../../../platform/configuration/common/configurationService';
 import { isGpt52CodexFamily, isGpt52Family, isGpt53Codex, isGptCodexFamily } from '../../../../platform/endpoint/common/chatModelCapabilities';
 import { IChatEndpoint } from '../../../../platform/networking/common/networking';
 import { InstructionMessage } from '../base/instructionMessage';
@@ -34,10 +35,12 @@ import {
 	ToolReferencesHintConstructor,
 } from './promptRegistry';
 
-// ─── AO (Area of Operations) auto-detection ───────────────────────────────
+// ─── AO (Area of Operations) ───────────────────────────────────────────────
+// AO is determined by the workspace setting (ontapPreamble), NOT by runtime
+// MCP detection. MCP server info is still gathered for diagnostic display.
 
 interface AOStatus {
-	/** Detected area of operations */
+	/** Area of operations — derived from ontapPreamble workspace setting */
 	readonly ao: 'LOCAL' | 'ONTAP';
 	/** MCP server labels detected (e.g., ['mastra', 'opengrok', 'vsim']) */
 	readonly mcpServers: readonly string[];
@@ -45,9 +48,10 @@ interface AOStatus {
 	readonly mcpToolCount: number;
 }
 
-function detectAO(availableTools: readonly LanguageModelToolInformation[] | undefined): AOStatus {
+/** Detect connected MCP servers and tool count (diagnostic info only — does NOT determine AO). */
+function detectMcpInfo(availableTools: readonly LanguageModelToolInformation[] | undefined): { readonly mcpServers: readonly string[]; readonly mcpToolCount: number } {
 	if (!availableTools) {
-		return { ao: 'LOCAL', mcpServers: [], mcpToolCount: 0 };
+		return { mcpServers: [], mcpToolCount: 0 };
 	}
 
 	const mcpTools = availableTools.filter(t => t.name.startsWith('mcp_'));
@@ -56,12 +60,7 @@ function detectAO(availableTools: readonly LanguageModelToolInformation[] | unde
 		return parts.length >= 2 ? parts[1] : 'unknown';
 	}))];
 
-	// ONTAP if known ONTAP MCP servers are present
-	const ontapIndicators = ['mastra', 'opengrok', 'opengrokmcp', 'vsim'];
-	const isOntap = serverLabels.some(s => ontapIndicators.includes(s.toLowerCase()));
-
 	return {
-		ao: isOntap ? 'ONTAP' : 'LOCAL',
 		mcpServers: serverLabels,
 		mcpToolCount: mcpTools.length,
 	};
@@ -169,10 +168,11 @@ class CommunicationProtocol extends PromptElement<CommunicationProtocolProps> {
 					<br />
 					{'**Reconnaissance:** RECON = map the codebase/system, identify entry points and dependencies | SITREP = situation report with SCOPE packet | Read back = echo critical identifiers and explain why they matter'}<br />
 					<br />
-					{'**Environment (auto-detected):**'}<br />
-					{`Current AO: ${aoStatus.ao} | MCP servers: ${aoStatus.mcpServers.length > 0 ? aoStatus.mcpServers.join(', ') : 'none'} (${aoStatus.mcpToolCount} tools)`}<br />
-					{'AO: LOCAL = local VS Code workspace, standard tools (grep, file search, terminal). AO: ONTAP = ONTAP codebase, MCP-first (mastra-search, vsim-mcp), full ONTAP rules active. AO is auto-detected from connected MCP servers — ONTAP indicators: mastra, opengrok, vsim.'}<br />
-					{'When Delta asks to confirm AO (e.g., "AO?", "confirm AO"), respond with: detected AO, connected MCP servers + tool count, and loaded workspaces.'}<br />
+					{'**Environment:**'}<br />
+					{`Current AO: ${aoStatus.ao} | MCP servers: ${aoStatus.mcpServers.length > 0 ? aoStatus.mcpServers.join(', ') : 'none'} (${aoStatus.mcpToolCount} tools) | ONTAP preamble: ${aoStatus.ao === 'ONTAP' ? 'injected (setting enabled)' : 'not injected'}`}<br />
+					{'AO is determined by the workspace setting github.copilot.chat.advanced.ontapPreamble (true = ONTAP, false = LOCAL). MCP server detection provides additional context: ONTAP indicators are mastra, opengrok, vsim.'}<br />
+					{'AO: LOCAL = local VS Code workspace, standard tools (grep, file search, terminal). AO: ONTAP = ONTAP codebase, MCP-first (mastra-search, vsim-mcp), full ONTAP rules active, ONTAP domain preamble injected.'}<br />
+					{'When Delta asks to confirm AO (e.g., "AO?", "confirm AO"), respond with: detected AO, ONTAP preamble setting state, connected MCP servers + tool count, and loaded workspaces.'}<br />
 					{'CROSSDECK = Dinesh is coming from another VS Code window, workspace, or P4 workspace. Expect foreign context, new files, references to things not yet loaded. Ask what was brought over before assuming. Re-read any files that may have changed externally.'}<br />
 					<br />
 					{'**Memory:** LOGBOOK = save to user memory (/memories/, persistent across all sessions) | FIELD NOTES = save to project memory (/memories/repo/, scoped to current workspace)'}<br />
@@ -212,7 +212,7 @@ class CommunicationProtocol extends PromptElement<CommunicationProtocolProps> {
 					<br />
 					{'### Pre-Flight Checklist'}<br />
 					{'Before committing to expensive operations (RECON, multi-file edits, subagent launches, build cycles), verify:'}<br />
-					{'1. **AO confirmed?** AO is auto-detected from MCP servers (shown above). If the detected AO seems wrong for the task, flag it: "AO detected as [X] but this looks like [Y] work — confirm?" Otherwise trust the auto-detection.'}<br />
+					{'1. **AO confirmed?** AO is controlled by workspace setting (ontapPreamble) and confirmed by MCP server detection (shown above). If the setting and detected MCP servers disagree, flag it: "Setting says [X] but MCP detection shows [Y] — confirm?"'}<br />
 					{'2. **Context available?** If Dinesh references files, modules, or functions not yet loaded, pause and ask: "I need [X] — do you have it, or should I hunt it down? Best path?" This is the #1 source of friction in ONTAP work.'}<br />
 					{'3. **Tools available?** MCP servers are auto-detected above. If AO is ONTAP but expected MCP servers are missing (mastra-search, vsim-mcp), flag immediately.'}<br />
 					{'Do NOT ask about obvious context or routine operations. Only pause for genuine ambiguity that would waste significant resources if wrong. Be mindful of these checks continuously — ask only when it actually matters.'}<br />
@@ -323,6 +323,13 @@ function resolveOpenAIReminderInstructions(endpoint: IChatEndpoint): ReminderIns
  * 3. Preamble renders BEFORE the stock prompt — earlier = higher salience.
  */
 class PersonalSystemPrompt extends PromptElement<DefaultAgentPromptProps> {
+	constructor(
+		props: DefaultAgentPromptProps,
+		@IConfigurationService private readonly configurationService: IConfigurationService,
+	) {
+		super(props);
+	}
+
 	async render(_state: void, sizing: PromptSizing) {
 		const endpoint = sizing.endpoint as IChatEndpoint | undefined;
 		if (!endpoint) {
@@ -338,10 +345,15 @@ class PersonalSystemPrompt extends PromptElement<DefaultAgentPromptProps> {
 			StockPrompt = resolveOpenAIStockPrompt(endpoint);
 		}
 
-		const aoStatus = detectAO(this.props.availableTools);
+		const ontapEnabled = this.configurationService.getConfig(ConfigKey.Advanced.OntapPreamble);
+		const mcpInfo = detectMcpInfo(this.props.availableTools);
+		const aoStatus: AOStatus = {
+			ao: ontapEnabled ? 'ONTAP' : 'LOCAL',
+			...mcpInfo,
+		};
 
 		return <>
-			{aoStatus.ao === 'ONTAP' && <OntapPreamble />}
+			{ontapEnabled && <OntapPreamble />}
 			<CommunicationProtocol aoStatus={aoStatus} />
 			<StockPrompt {...this.props} />
 		</>;

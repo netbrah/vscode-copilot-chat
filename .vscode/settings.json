@@ -156,6 +156,7 @@
 	"github.copilot.chat.searchSubagent.enabled": true,
 	"github.copilot.chat.compactionCustomInstructions": "When compacting conversation history, preserve: SCOPE packets, decisions and their rationale, hard/soft constraints, open questions, function call chains, module paths, and iterator patterns. Drop: chit-chat, redundant confirmations, already-encoded details, stale tool output that has been superseded. Compress multi-turn explorations into single decision + rationale.",
 	"github.copilot.chat.advanced.injectContextBudgetMetadata": true,
+	"github.copilot.chat.advanced.ontapPreamble": false,
 	"chat.tools.terminal.autoApprove": {
 		"npx vitest": true
 	},
