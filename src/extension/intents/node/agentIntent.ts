@@ -29,7 +29,6 @@ import { isCancellationError } from '../../../util/vs/base/common/errors';
 import { Iterable } from '../../../util/vs/base/common/iterator';
 import { IInstantiationService, ServicesAccessor } from '../../../util/vs/platform/instantiation/common/instantiation';
 
-import { toTextPart } from '../../../platform/chat/common/globalStringUtils';
 import { ChatResponseProgressPart2 } from '../../../vscodeTypes';
 import { ICommandService } from '../../commands/node/commandService';
 import { Intent } from '../../common/constants';
@@ -43,6 +42,7 @@ import { IDocumentContext } from '../../prompt/node/documentContext';
 import { IBuildPromptResult, IIntent, IIntentInvocation } from '../../prompt/node/intents';
 import { AgentPrompt, AgentPromptProps } from '../../prompts/node/agent/agentPrompt';
 import { BackgroundSummarizationState, BackgroundSummarizer } from '../../prompts/node/agent/backgroundSummarizer';
+import { getPersonalBudgetSafetyFactor, injectContextBudgetMetadata } from '../../prompts/node/agent/personalAgentIntentHooks';
 import { AgentPromptCustomizations, PromptRegistry } from '../../prompts/node/agent/promptRegistry';
 import { SummarizedConversationHistory, SummarizedConversationHistoryMetadata, SummarizedConversationHistoryPropsBuilder } from '../../prompts/node/agent/summarizedConversationHistory';
 import { PromptRenderer } from '../../prompts/node/base/promptRenderer';
@@ -389,7 +389,7 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 		const summarizationEnabled = this.configurationService.getConfig(ConfigKey.SummarizeAgentConversationHistory) && this.prompt === AgentPrompt && !responsesCompactionContextManagementEnabled;
 		const backgroundCompactionEnabled = summarizationEnabled && this.configurationService.getExperimentBasedConfig(ConfigKey.BackgroundCompaction, this.expService);
 
-		const budgetSafetyFactor = this.configurationService.getConfig<number | undefined>(ConfigKey.Advanced.CompactionSafetyFactor) ?? 0.85;
+		const budgetSafetyFactor = getPersonalBudgetSafetyFactor(this.configurationService);
 		const budgetThreshold = Math.floor((baseBudget - toolTokens) * budgetSafetyFactor);
 		const safeBudget = useTruncation ? Number.MAX_SAFE_INTEGER : budgetThreshold;
 		const endpoint = toolTokens > 0 ? this.endpoint.cloneWithTokenOverride(safeBudget) : this.endpoint;
@@ -616,17 +616,16 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 
 		addCacheBreakpoints(result.messages);
 
-		if (this.configurationService.getConfig(ConfigKey.Advanced.InjectContextBudgetMetadata)) {
-			const systemMsg = result.messages.find(m => m.role === Raw.ChatRole.System);
-			if (systemMsg) {
-				const effectiveBudget = useTruncation ? baseBudget : budgetThreshold;
-				const compactionRatio = budgetThreshold > 0 ? (result.tokenCount / budgetThreshold).toFixed(2) : '0.00';
-				const summarized = summarizationEnabled && !!result.metadata.get(SummarizedConversationHistoryMetadata) ? 'yes' : 'no';
-				systemMsg.content.push(toTextPart(
-					`\n<!-- context_budget: ${result.tokenCount}/${effectiveBudget} tool_tokens: ${toolTokens} safety_factor: ${budgetSafetyFactor} compaction_ratio: ${compactionRatio} summarized: ${summarized} -->`
-				));
-			}
-		}
+		injectContextBudgetMetadata(result.messages, this.configurationService, {
+			tokenCount: result.tokenCount,
+			baseBudget,
+			budgetThreshold,
+			toolTokens,
+			safetyFactor: budgetSafetyFactor,
+			useTruncation: !!useTruncation,
+			summarizationEnabled: !!summarizationEnabled,
+			metadata: result.metadata,
+		});
 
 		if (this.request.command === 'error') {
 			// Should trigger a 400

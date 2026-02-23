@@ -4230,15 +4230,6 @@
 							"experimental"
 						]
 					},
-					"github.copilot.chat.advanced.injectContextBudgetMetadata": {
-						"type": "boolean",
-						"default": true,
-						"markdownDescription": "%github.copilot.config.injectContextBudgetMetadata%",
-						"tags": [
-							"advanced",
-							"experimental"
-						]
-					},
 					"github.copilot.chat.promptFileContextProvider.enabled": {
 						"type": "boolean",
 						"default": true,
@@ -4481,6 +4472,50 @@
 						"markdownDescription": "File path for file-based OTel exporter output (JSON-lines). When set, overrides exporter type to `file`.",
 						"tags": [
 							"advanced"
+						]
+					},
+					"github.copilot.chat.historicalToolResultMaxTokens": {
+						"type": [
+							"number",
+							"null"
+						],
+						"markdownDescription": "%github.copilot.config.historicalToolResultMaxTokens%",
+						"tags": [
+							"advanced",
+							"experimental"
+						]
+					},
+					"github.copilot.chat.compactionSafetyFactor": {
+						"type": [
+							"number",
+							"null"
+						],
+						"minimum": 0.5,
+						"maximum": 0.99,
+						"markdownDescription": "%github.copilot.config.compactionSafetyFactor%",
+						"tags": [
+							"advanced",
+							"experimental"
+						]
+					},
+					"github.copilot.chat.compactionCustomInstructions": {
+						"type": [
+							"string",
+							"null"
+						],
+						"markdownDescription": "%github.copilot.config.compactionCustomInstructions%",
+						"tags": [
+							"advanced",
+							"experimental"
+						]
+					},
+					"github.copilot.chat.advanced.injectContextBudgetMetadata": {
+						"type": "boolean",
+						"default": true,
+						"markdownDescription": "%github.copilot.config.injectContextBudgetMetadata%",
+						"tags": [
+							"advanced",
+							"experimental"
 						]
 					}
 				}

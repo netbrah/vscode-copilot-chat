@@ -7,6 +7,7 @@ import { BasePromptElementProps, PromptElement, PromptSizing } from '@vscode/pro
 import { LanguageModelToolInformation } from 'vscode';
 import { ConfigKey, IConfigurationService } from '../../../../platform/configuration/common/configurationService';
 import { isGpt52CodexFamily, isGpt52Family, isGpt53Codex, isGptCodexFamily } from '../../../../platform/endpoint/common/chatModelCapabilities';
+import { ILogService } from '../../../../platform/log/common/logService';
 import { IChatEndpoint } from '../../../../platform/networking/common/networking';
 import { InstructionMessage } from '../base/instructionMessage';
 import { IPromptEndpoint } from '../base/promptRenderer';
@@ -119,6 +120,10 @@ class OntapPreamble extends PromptElement<BasePromptElementProps> {
 					{'4. **Never speculate about code.** Either you found it with a tool, or you didn\'t. Never say "I believe" or "probably".'}<br />
 					<br />
 					{'5. **ONTAP patterns to recognize:** CLI handlers: do_*, cmd_*, handle_* | Implementation indirection: *_imp, *_impl | Iterator classes: *_iterator, *_rdb (SMDB-generated) | Macros: FOREACH_*, DEFINE_* | 74% of tables have NO CLI command — this is normal'}<br />
+					<br />
+					{'6. **Ask when context is missing.** If Delta references files, functions, or modules that are not loaded and cannot be found via MCP tools, ask: "I need [X] — do you have it, or should I hunt it down?" Do not guess. Do not substitute with grep.'}<br />
+					<br />
+					{'7. **grep/find/rg fallback when MCP tools are available is a TANGO.** Falling back to workspace grep, find, or rg in a 100K+ file codebase when mastra-search or OpenGrok MCP tools are connected is misalignment. Use MCP tools or ask Delta for direction.'}<br />
 					<br />
 					{'### Build & Test Workflow'}<br />
 					<br />
@@ -251,16 +256,17 @@ class CommunicationProtocol extends PromptElement<CommunicationProtocolProps> {
 
 // ─── Stock prompt selection helpers ────────────────────────────────────────
 
-function resolveClaudeStockPrompt(model: string): SystemPrompt {
+function resolveClaudeStockPrompt(model: string, logService?: ILogService): SystemPrompt {
 	if (model === 'claude-sonnet-4' || model === 'claude-sonnet-4-20250514') {
 		return DefaultAnthropicAgentPrompt;
 	} else if (model.includes('4-5') || model.includes('4.5')) {
 		return Claude45DefaultPrompt;
 	}
+	logService?.debug(`[PersonalPrompt] Claude model '${model}' not explicitly matched, using Claude46DefaultPrompt fallback`);
 	return Claude46DefaultPrompt;
 }
 
-function resolveOpenAIStockPrompt(endpoint: IChatEndpoint): SystemPrompt {
+function resolveOpenAIStockPrompt(endpoint: IChatEndpoint, logService?: ILogService): SystemPrompt {
 	const family = endpoint.family;
 
 	if (isGpt52Family(family)) {
@@ -279,6 +285,7 @@ function resolveOpenAIStockPrompt(endpoint: IChatEndpoint): SystemPrompt {
 		return Gpt51Prompt;
 	}
 	// gpt-5, gpt-5-mini, or anything else GPT5+
+	logService?.debug(`[PersonalPrompt] OpenAI family '${family}' using DefaultGpt5AgentPrompt fallback`);
 	return DefaultGpt5AgentPrompt;
 }
 
@@ -319,6 +326,7 @@ class PersonalSystemPrompt extends PromptElement<DefaultAgentPromptProps> {
 	constructor(
 		props: DefaultAgentPromptProps,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
+		@ILogService private readonly logService: ILogService,
 	) {
 		super(props);
 	}
@@ -333,9 +341,9 @@ class PersonalSystemPrompt extends PromptElement<DefaultAgentPromptProps> {
 		let StockPrompt: SystemPrompt;
 
 		if (family.startsWith('claude') || family.startsWith('Anthropic')) {
-			StockPrompt = resolveClaudeStockPrompt(endpoint.model ?? '');
+			StockPrompt = resolveClaudeStockPrompt(endpoint.model ?? '', this.logService);
 		} else {
-			StockPrompt = resolveOpenAIStockPrompt(endpoint);
+			StockPrompt = resolveOpenAIStockPrompt(endpoint, this.logService);
 		}
 
 		const ontapEnabled = this.configurationService.getConfig(ConfigKey.Advanced.OntapPreamble);

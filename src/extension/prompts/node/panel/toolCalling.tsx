@@ -50,11 +50,6 @@ export interface ChatToolCallsProps extends BasePromptElementProps {
 	readonly toolCallMode?: CopilotToolMode;
 	readonly enableCacheBreakpoints?: boolean;
 	readonly truncateAt?: number;
-	/**
-	 * When set, historical (old-turn) tool results use this tighter token limit
-	 * instead of `truncateAt`. This reduces context accumulation from stale results.
-	 */
-	readonly historicalTruncateAt?: number;
 }
 
 const MAX_INPUT_VALIDATION_RETRIES = 5;
@@ -68,7 +63,8 @@ export class ChatToolCalls extends PromptElement<ChatToolCallsProps, void> {
 		props: PromptElementProps<ChatToolCallsProps>,
 		@IToolsService private readonly toolsService: IToolsService,
 		@IPromptEndpoint private readonly promptEndpoint: IPromptEndpoint,
-		@IInstantiationService private readonly instantiationService: IInstantiationService
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@IConfigurationService private readonly configurationService: IConfigurationService,
 	) {
 		super(props);
 	}
@@ -139,8 +135,11 @@ export class ChatToolCalls extends PromptElement<ChatToolCallsProps, void> {
 		const reserve1N = (1 / (total * 4)) / fixedNameToolCalls.length;
 		// todo@connor4312: historical tool calls don't need to reserve and can all be flexed together
 		// Use tighter truncation for historical tool results to reduce context accumulation
-		const effectiveTruncateAt = this.props.isHistorical && this.props.historicalTruncateAt
-			? Math.min(this.props.historicalTruncateAt, this.props.truncateAt ?? Infinity)
+		const historicalTruncateAt = this.props.isHistorical
+			? this.configurationService.getConfig<number | undefined>(ConfigKey.Advanced.HistoricalToolResultMaxTokens)
+			: undefined;
+		const effectiveTruncateAt = historicalTruncateAt
+			? Math.min(historicalTruncateAt, this.props.truncateAt ?? Infinity)
 			: this.props.truncateAt;
 		for (const [i, toolCall] of fixedNameToolCalls.entries()) {
 			const KeepWith = assistantToolCalls[i].keepWith;
