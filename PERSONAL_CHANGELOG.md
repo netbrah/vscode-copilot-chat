@@ -25,7 +25,7 @@
 
 ### Added
 - **`personalPrompts.tsx`** — personal cognitive interface layer with:
-  - Custom identity rules (callsign: "Super Copilot McFly", Maverick/Iceman dynamic)
+  - Custom identity rules (callsign: "APEX", Delta/APEX wingman doctrine)
   - ONTAP C/C++ domain preamble (MCP-first tool use, no training data speculation, ONTAP pattern recognition)
   - Model-aware prompt delegation (Claude 4.6 / 4.5 / Sonnet 4)
 - **`build-and-install.sh`** — one-command pull→deps→build→package→install pipeline

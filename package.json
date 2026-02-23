@@ -4230,6 +4230,15 @@
 							"experimental"
 						]
 					},
+					"github.copilot.chat.advanced.injectContextBudgetMetadata": {
+						"type": "boolean",
+						"default": true,
+						"markdownDescription": "%github.copilot.config.injectContextBudgetMetadata%",
+						"tags": [
+							"advanced",
+							"experimental"
+						]
+					},
 					"github.copilot.chat.promptFileContextProvider.enabled": {
 						"type": "boolean",
 						"default": true,

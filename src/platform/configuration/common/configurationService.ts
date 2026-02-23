@@ -672,6 +672,13 @@ export namespace ConfigKey {
 		 */
 		export const CompactionSafetyFactor = defineAndMigrateSetting<number | undefined>('chat.advanced.compactionSafetyFactor', 'chat.compactionSafetyFactor', undefined);
 		/**
+		 * When enabled, injects a metadata HTML comment into the system message with
+		 * token budget telemetry (used/total, tool tokens, safety factor, compaction
+		 * ratio, summarization state). Useful for model self-awareness of context
+		 * pressure and debugging prompt budget issues.
+		 */
+		export const InjectContextBudgetMetadata = defineSetting<boolean>('chat.advanced.injectContextBudgetMetadata', ConfigType.Simple, true);
+		/**
 		 * Custom instructions appended to the summarization prompt.
 		 * Use this to specify domain-specific context preservation rules,
 		 * e.g. "Always preserve function call chains, module paths, and iterator patterns."

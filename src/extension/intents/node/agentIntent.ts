@@ -29,6 +29,7 @@ import { isCancellationError } from '../../../util/vs/base/common/errors';
 import { Iterable } from '../../../util/vs/base/common/iterator';
 import { IInstantiationService, ServicesAccessor } from '../../../util/vs/platform/instantiation/common/instantiation';
 
+import { toTextPart } from '../../../platform/chat/common/globalStringUtils';
 import { ChatResponseProgressPart2 } from '../../../vscodeTypes';
 import { ICommandService } from '../../commands/node/commandService';
 import { Intent } from '../../common/constants';
@@ -54,7 +55,6 @@ import { ContributedToolName, ToolName } from '../../tools/common/toolNames';
 import { IToolsService } from '../../tools/common/toolsService';
 import { applyPatch5Description } from '../../tools/node/applyPatchTool';
 import { getAgentMaxRequests } from '../common/agentConfig';
-import { toTextPart } from '../../../platform/chat/common/globalStringUtils';
 import { addCacheBreakpoints } from './cacheBreakpoints';
 import { EditCodeIntent, EditCodeIntentInvocation, EditCodeIntentInvocationOptions, mergeMetadata, toNewChatReferences } from './editCodeIntent';
 
