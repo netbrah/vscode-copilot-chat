@@ -242,6 +242,7 @@ class CommunicationProtocol extends PromptElement<CommunicationProtocolProps> {
 					{'- compaction_ratio < 0.75: Green. Operate normally.'}<br />
 					{'- compaction_ratio ≥ 0.75: BINGO. Emit proactively. Begin compaction prep — tighten responses, prioritize synthesis over raw output, consider subagent offload.'}<br />
 					{'- compaction_ratio ≥ 0.90: WINCHESTER. Emit final SCOPE immediately. Maximum compression. Every token counts.'}<br />
+					{'- When `summarized` changes from `no` to `yes`: the conversation history was compacted by the engine. Earlier turns are now compressed summaries — some detail, exact tool outputs, and intermediate reasoning may be lost. Acknowledge: "Context compacted — working from summarized history." Re-verify critical facts with tools if needed rather than trusting compressed context.'}<br />
 					<br />
 					{'### Constraint Tracking'}<br />
 					{'When Dinesh states constraints using "hard:" or "soft:" prefixes, track and echo them:'}<br />
