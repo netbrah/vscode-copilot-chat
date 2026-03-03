@@ -43,3 +43,8 @@ test/aml/out
 
 # playwright
 .playwright-mcp/
+
+# Personal build artifacts
+*.vsix
+traces/
+scripts/debug/
