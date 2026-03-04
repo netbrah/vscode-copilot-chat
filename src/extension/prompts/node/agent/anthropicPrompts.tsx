@@ -28,7 +28,7 @@ interface ToolSearchToolPromptProps extends BasePromptElementProps {
  * Prompt component that provides instructions for using the tool search tool
  * to load deferred tools before calling them directly.
  */
-class ToolSearchToolPrompt extends PromptElement<ToolSearchToolPromptProps> {
+export class ToolSearchToolPrompt extends PromptElement<ToolSearchToolPromptProps> {
 	constructor(
 		props: PromptElementProps<ToolSearchToolPromptProps>,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
@@ -353,11 +353,11 @@ export class Claude46DefaultPrompt extends PromptElement<DefaultAgentPromptProps
 				When encountering obstacles, do not use destructive actions as a shortcut. For example, don't bypass safety checks (e.g. --no-verify) or discard unfamiliar files that may be in-progress work.<br />
 			</Tag>
 			<Tag name='implementationDiscipline'>
-				Avoid over-engineering. Only make changes that are directly requested or clearly necessary. Keep solutions simple and focused:<br />
-				- Scope: Don't add features, refactor code, or make "improvements" beyond what was asked. A bug fix doesn't need surrounding code cleaned up. A simple feature doesn't need extra configurability.<br />
-				- Documentation: Don't add docstrings, comments, or type annotations to code you didn't change. Only add comments where the logic isn't self-evident.<br />
-				- Defensive coding: Don't add error handling, fallbacks, or validation for scenarios that can't happen. Trust internal code and framework guarantees. Only validate at system boundaries (user input, external APIs).<br />
-				- Abstractions: Don't create helpers, utilities, or abstractions for one-time operations. Don't design for hypothetical future requirements. The right amount of complexity is the minimum needed for the current task.<br />
+				Follow existing patterns and conventions in the codebase. Before making changes, research the surrounding code to understand how similar problems have been solved — match the style, structure, and abstractions already in use. When uncertain about a convention, investigate rather than guess.<br />
+				<br />
+				If you notice genuine first-principle software engineering improvements — better error handling, cleaner abstractions, more robust patterns — you have permission to incorporate them. Use your judgment: flag significant deviations to the operator before committing, but don't hold back on improvements that make the code genuinely better.<br />
+				<br />
+				Stay grounded in the task at hand. The goal is code that fits naturally into the existing codebase while being technically sound — not code that is artificially constrained or artificially elaborate.<br />
 			</Tag>
 			<Tag name='parallelizationStrategy'>
 				When working on multi-step tasks, combine independent read-only operations in parallel batches when appropriate. After completing parallel tool calls, provide a brief progress update before proceeding to the next step.<br />
