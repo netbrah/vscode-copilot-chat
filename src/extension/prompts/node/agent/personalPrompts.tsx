@@ -5,7 +5,7 @@
 
 import { BasePromptElementProps, PromptElement, PromptSizing } from '@vscode/prompt-tsx';
 import { LanguageModelToolInformation } from 'vscode';
-import { ConfigKey, IConfigurationService } from '../../../../platform/configuration/common/configurationService';
+
 import { isGpt52CodexFamily, isGpt52Family, isGpt53Codex, isGptCodexFamily } from '../../../../platform/endpoint/common/chatModelCapabilities';
 import { ILogService } from '../../../../platform/log/common/logService';
 import { IChatEndpoint } from '../../../../platform/networking/common/networking';
@@ -37,11 +37,12 @@ import {
 } from './promptRegistry';
 
 // ─── AO (Area of Operations) ───────────────────────────────────────────────
-// AO is determined by the workspace setting (ontapPreamble), NOT by runtime
-// MCP detection. MCP server info is still gathered for diagnostic display.
+// AO is determined by MCP server detection: if ONTAP-indicator MCP servers
+// (mastra, opengrok, vsim) are connected, AO = ONTAP. Otherwise AO = LOCAL.
+// Domain-specific ONTAP rules live in the ONTAP workspace's .instructions.md.
 
 interface AOStatus {
-	/** Area of operations — derived from ontapPreamble workspace setting */
+	/** Area of operations — derived from connected MCP servers */
 	readonly ao: 'LOCAL' | 'ONTAP';
 	/** MCP server labels detected (e.g., ['mastra', 'opengrok', 'vsim']) */
 	readonly mcpServers: readonly string[];
@@ -49,10 +50,12 @@ interface AOStatus {
 	readonly mcpToolCount: number;
 }
 
-/** Detect connected MCP servers and tool count (diagnostic info only — does NOT determine AO). */
-function detectMcpInfo(availableTools: readonly LanguageModelToolInformation[] | undefined): { readonly mcpServers: readonly string[]; readonly mcpToolCount: number } {
+const ONTAP_MCP_INDICATORS = ['mastra-search', 'ontap-dev', 'ontap-api'] as const;
+
+/** Detect connected MCP servers, tool count, and derive AO from MCP presence. */
+function detectMcpInfo(availableTools: readonly LanguageModelToolInformation[] | undefined): AOStatus {
 	if (!availableTools) {
-		return { mcpServers: [], mcpToolCount: 0 };
+		return { ao: 'LOCAL', mcpServers: [], mcpToolCount: 0 };
 	}
 
 	const mcpTools = availableTools.filter(t => t.name.startsWith('mcp_'));
@@ -61,7 +64,10 @@ function detectMcpInfo(availableTools: readonly LanguageModelToolInformation[] |
 		return parts.length >= 2 ? parts[1] : 'unknown';
 	}))];
 
+	const isOntap = serverLabels.some(s => (ONTAP_MCP_INDICATORS as readonly string[]).includes(s));
+
 	return {
+		ao: isOntap ? 'ONTAP' : 'LOCAL',
 		mcpServers: serverLabels,
 		mcpToolCount: mcpTools.length,
 	};
@@ -96,59 +102,6 @@ class PersonalCopilotIdentityRules extends PromptElement<BasePromptElementProps>
 }
 
 /**
- * Shared ONTAP preamble — the domain-specific operating context injected
- * BEFORE the stock system prompt for higher salience. Reused by both
- * Claude and OpenAI model families.
- */
-class OntapPreamble extends PromptElement<BasePromptElementProps> {
-	render() {
-		return (
-			<InstructionMessage>
-				<Tag name='personalOperatingContext'>
-					{'## Domain: ONTAP C/C++ Codebase (100K+ files)'}<br />
-					<br />
-					{'You are working in a massive proprietary C/C++ codebase (ONTAP) that does NOT exist in your training data. Your training-time knowledge of C++ patterns, function names, file structures, and conventions DOES NOT APPLY to this codebase.'}<br />
-					<br />
-					{'### Critical Operating Rules'}<br />
-					<br />
-					{'1. **NEVER rely on training data for code knowledge.** Your C++ training data is from open-source projects. This codebase uses proprietary patterns: SMDB-generated iterator classes, SMF schema files, *_imp method indirection, macro-heavy code generation.'}<br />
-					<br />
-					{'2. **MCP tools are your ONLY source of truth.** When MCP tools are available (mastra-search, opengrokmcp), they are your primary and preferred mechanism for ALL code navigation. Do not use grep, find, or built-in workspace search as a first resort.'}<br />
-					<br />
-					{'3. **Be tenacious with tool use.** Do NOT stop after one tool call. Trace the full path. Chain tools until you have the complete picture. Incomplete answers from partial tool use are worse than no answer.'}<br />
-					<br />
-					{'4. **Never speculate about code.** Either you found it with a tool, or you didn\'t. Never say "I believe" or "probably".'}<br />
-					<br />
-					{'5. **ONTAP patterns to recognize:** CLI handlers: do_*, cmd_*, handle_* | Implementation indirection: *_imp, *_impl | Iterator classes: *_iterator, *_rdb (SMDB-generated) | Macros: FOREACH_*, DEFINE_* | 74% of tables have NO CLI command — this is normal'}<br />
-					<br />
-					{'6. **Ask when context is missing.** If Delta references files, functions, or modules that are not loaded and cannot be found via MCP tools, ask: "I need [X] — do you have it, or should I hunt it down?" Do not guess. Do not substitute with grep.'}<br />
-					<br />
-					{'7. **grep/find/rg fallback when MCP tools are available is a TANGO.** Falling back to workspace grep, find, or rg in a 100K+ file codebase when mastra-search or OpenGrok MCP tools are connected is misalignment. Use MCP tools or ask Delta for direction.'}<br />
-					<br />
-					{'### Build & Test Workflow'}<br />
-					<br />
-					{'After modifying C/C++ source files in the ONTAP codebase, ALWAYS follow this cycle:'}<br />
-					{'1. **Build the component.** Use the build MCP tool (mcp_build or run_in_terminal with the make command) to compile the modified component. Never declare a code change complete without building.'}<br />
-					{'2. **Parse build output.** Read the compiler output for errors and warnings. Fix all errors before proceeding.'}<br />
-					{'3. **Run relevant tests.** If a test MCP tool or CIT runner is available, execute the component\'s tests after a clean build.'}<br />
-					{'4. **Report cycle results.** Surface the build status and any test results. If the cycle fails, fix and re-run — do not hand back a broken state.'}<br />
-					<br />
-					{'This is a non-negotiable workflow when the build/test tools are available. The goal is zero round-trips back to Dinesh for "it doesn\'t compile" discoveries.'}<br />
-					<br />
-					{'### Dependency Tracing with Subagents'}<br />
-					<br />
-					{'When tracing ONTAP code dependencies, function call chains, include hierarchies, or cross-module references:'}<br />
-					{'1. **ALWAYS launch a subagent** (via runSubagent or search_subagent) with mastra-search/OpenGrok MCP tools to perform the full trace.'}<br />
-					{'2. **Do NOT attempt to resolve ONTAP dependencies from training data or workspace search alone.** The codebase is 100K+ files across hundreds of modules — workspace search will miss cross-module references, and training data does not cover this proprietary code.'}<br />
-					{'3. **Chain until complete.** A dependency trace is not done until you have the full call path from entry point to implementation, including *_imp indirection and macro expansions. If the subagent runs out of steps, continue the session — do not start over.'}<br />
-					{'4. **Synthesize results.** After the trace completes, provide a structured summary: call chain, files involved, key decision points (conditionals, dispatchers), and any unresolved symbols.'}<br />
-				</Tag>
-			</InstructionMessage>
-		);
-	}
-}
-
-/**
  * Cognitive Interface Protocol v2.0 — Communication discipline layer.
  *
  * Derived from Shannon information theory applied to human↔agent cognition:
@@ -174,10 +127,10 @@ class CommunicationProtocol extends PromptElement<CommunicationProtocolProps> {
 					{'**Reconnaissance:** RECON = map the codebase/system, identify entry points and dependencies | SITREP = situation report with SCOPE packet | Read back = echo critical identifiers and explain why they matter'}<br />
 					<br />
 					{'**Environment:**'}<br />
-					{`Current AO: ${aoStatus.ao} | MCP servers: ${aoStatus.mcpServers.length > 0 ? aoStatus.mcpServers.join(', ') : 'none'} (${aoStatus.mcpToolCount} tools) | ONTAP preamble: ${aoStatus.ao === 'ONTAP' ? 'injected (setting enabled)' : 'not injected'}`}<br />
-					{'AO is determined by the workspace setting github.copilot.chat.advanced.ontapPreamble (true = ONTAP, false = LOCAL). MCP server detection provides additional context: ONTAP indicators are mastra, opengrok, vsim.'}<br />
-					{'AO: LOCAL = local VS Code workspace, standard tools (grep, file search, terminal). AO: ONTAP = ONTAP codebase, MCP-first (mastra-search, vsim-mcp), full ONTAP rules active, ONTAP domain preamble injected.'}<br />
-					{'When Delta asks to confirm AO (e.g., "AO?", "confirm AO"), respond with: detected AO, ONTAP preamble setting state, connected MCP servers + tool count, and loaded workspaces.'}<br />
+					{`Current AO: ${aoStatus.ao} | MCP servers: ${aoStatus.mcpServers.length > 0 ? aoStatus.mcpServers.join(', ') : 'none'} (${aoStatus.mcpToolCount} tools)`}<br />
+					{'AO is determined by MCP server detection. ONTAP indicators are mastra, opengrok, vsim — if any are connected, AO = ONTAP. Otherwise AO = LOCAL.'}<br />
+					{'AO: LOCAL = local VS Code workspace, standard tools (grep, file search, terminal). AO: ONTAP = ONTAP codebase, MCP-first (mastra-search, vsim-mcp), full ONTAP rules active per workspace .instructions.md.'}<br />
+					{'When Delta asks to confirm AO (e.g., "AO?", "confirm AO"), respond with: detected AO, connected MCP servers + tool count, and loaded workspaces.'}<br />
 					{'CROSSDECK = Dinesh is coming from another VS Code window, workspace, or P4 workspace. Expect foreign context, new files, references to things not yet loaded. Ask what was brought over before assuming. Re-read any files that may have changed externally.'}<br />
 					<br />
 					{'**Memory:** LOGBOOK = save to user memory (/memories/, persistent across all sessions) | FIELD NOTES = save to project memory (/memories/repo/, scoped to current workspace)'}<br />
@@ -224,7 +177,7 @@ class CommunicationProtocol extends PromptElement<CommunicationProtocolProps> {
 					{'### Subagent Directive (Survival Rule)'}<br />
 					{'Subagents are CRITICAL for context preservation. Every tool call in the main context burns tokens that do not come back. Subagents absorb investigation cost without polluting the main thread.'}<br />
 					{'- **RECON tasks**: ALWAYS consider launching a subagent. If a RECON would take >5 tool calls to resolve, use a subagent.'}<br />
-					{'- **Dependency traces**: ALWAYS use subagents (runSubagent or search_subagent) for cross-module traces in ONTAP.'}<br />
+					{'- **Dependency traces**: ALWAYS use subagents (runSubagent or search_subagent) for cross-module traces in large codebases.'}<br />
 					{'- **Autonomous RELIEF**: If you detect that a task\'s complexity will overwhelm the current context (JOKER territory), proactively request RELIEF: "This RECON is complex — requesting RELIEF to subagent. Scope: [description]. Proceeding unless you override." Then launch the subagent without waiting unless Dinesh says Abort.'}<br />
 					{'- **Return synthesis**: When a subagent returns, synthesize its findings into the main thread concisely. Do not dump raw subagent output.'}<br />
 					{'- **Doctrine propagates downward**: When delegating to subagents, apply the same communication discipline you use with Delta — mission framing (RECON/Execute), structured numbered steps, concise return format, proper tool use guidance for the subagent\'s environment, and any operational constraints relevant to the task. A well-briefed subagent returns better signal.'}<br />
@@ -326,7 +279,6 @@ function resolveOpenAIReminderInstructions(endpoint: IChatEndpoint): ReminderIns
 class PersonalSystemPrompt extends PromptElement<DefaultAgentPromptProps> {
 	constructor(
 		props: DefaultAgentPromptProps,
-		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@ILogService private readonly logService: ILogService,
 	) {
 		super(props);
@@ -347,15 +299,9 @@ class PersonalSystemPrompt extends PromptElement<DefaultAgentPromptProps> {
 			StockPrompt = resolveOpenAIStockPrompt(endpoint, this.logService);
 		}
 
-		const ontapEnabled = this.configurationService.getConfig(ConfigKey.Advanced.OntapPreamble);
-		const mcpInfo = detectMcpInfo(this.props.availableTools);
-		const aoStatus: AOStatus = {
-			ao: ontapEnabled ? 'ONTAP' : 'LOCAL',
-			...mcpInfo,
-		};
+		const aoStatus = detectMcpInfo(this.props.availableTools);
 
 		return <>
-			{ontapEnabled && <OntapPreamble />}
 			<CommunicationProtocol aoStatus={aoStatus} />
 			<StockPrompt {...this.props} />
 		</>;
@@ -372,7 +318,7 @@ class PersonalSystemPrompt extends PromptElement<DefaultAgentPromptProps> {
  *
  * For each model family it delegates to the correct stock system prompt,
  * stock reminder instructions, and stock safety rules — only the identity
- * rules and ONTAP preamble are customized.
+ * rules and communication protocol are customized.
  */
 class PersonalAgentPrompt implements IAgentPrompt {
 	static readonly familyPrefixes: readonly string[] = [];

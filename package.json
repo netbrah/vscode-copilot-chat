@@ -4518,15 +4518,7 @@
 							"experimental"
 						]
 					},
-					"github.copilot.chat.advanced.ontapPreamble": {
-						"type": "boolean",
-						"default": false,
-						"markdownDescription": "%github.copilot.config.ontapPreamble%",
-						"tags": [
-							"advanced",
-							"experimental"
-						]
-					}
+
 				}
 			}
 		],

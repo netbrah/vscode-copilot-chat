@@ -678,12 +678,7 @@ export namespace ConfigKey {
 		 * pressure and debugging prompt budget issues.
 		 */
 		export const InjectContextBudgetMetadata = defineSetting<boolean>('chat.advanced.injectContextBudgetMetadata', ConfigType.Simple, true);
-		/**
-		 * When enabled, injects the ONTAP C/C++ domain-specific preamble into the
-		 * system prompt. Enable in ONTAP workspaces, disable in local/general
-		 * workspaces. Workspace-level override recommended.
-		 */
-		export const OntapPreamble = defineSetting<boolean>('chat.advanced.ontapPreamble', ConfigType.Simple, false);
+
 		/**
 		 * Custom instructions appended to the summarization prompt.
 		 * Use this to specify domain-specific context preservation rules,

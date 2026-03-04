@@ -78,25 +78,49 @@ export function injectContextBudgetMetadata(
 // ─── H2a: Compaction custom instructions merge ────────────────────────────
 
 /**
- * Merge config-based custom compaction instructions with the existing
- * summarization instructions in the props. Returns the original propsInfo
- * unchanged if no custom instructions are configured.
+ * Default compaction instructions tuned for the cognitive interface protocol.
+ * Ensures protocol state, constraints, and decision rationale survive
+ * context compression. Config-based instructions override these entirely.
+ */
+const DefaultCompactionInstructions = [
+	'CRITICAL — Preserve in every summary:',
+	'1. Active SCOPE state (SITUATION, COMMITMENT, PRIORITY, EPISTEMICS)',
+	'2. All hard/soft constraints stated by Delta (the user)',
+	'3. Active todo list items and their status',
+	'4. Files modified with specific line ranges',
+	'5. Brevity protocol state (last codeword used, current phase)',
+	'6. AO designation (LOCAL/ONTAP) and MCP server state',
+	'7. Any FIELD NOTES or LOGBOOK entries created this session',
+	'',
+	'Aggressively compress:',
+	'- Raw tool call outputs (keep conclusion, drop intermediate output)',
+	'- File contents that were read but not modified',
+	'- Search results where only 1-2 hits were relevant',
+	'- Repeated error-fix cycles (keep final working state only)',
+	'',
+	'Never drop:',
+	'- The last 2 tool call rounds verbatim',
+	'- Any user message (Delta\'s exact words matter for intent)',
+	'- Decision rationale for architectural choices',
+].join('\n');
+
+/**
+ * Merge compaction instructions with the existing summarization instructions.
+ * Uses config-based instructions if set, otherwise falls back to the built-in
+ * default that preserves cognitive interface protocol state.
  */
 export function mergeCompactionInstructions(
 	configService: IConfigurationService,
 	propsInfo: ISummarizedConversationHistoryInfo
 ): ISummarizedConversationHistoryInfo {
-	const configInstructions = configService.getConfig<string | undefined>(
+	const compactionInstructions = configService.getConfig<string | undefined>(
 		ConfigKey.Advanced.CompactionCustomInstructions
-	);
-	if (!configInstructions) {
-		return propsInfo;
-	}
+	) ?? DefaultCompactionInstructions;
 
 	const existingInstructions = propsInfo.props.summarizationInstructions;
 	const mergedInstructions = existingInstructions
-		? existingInstructions + '\n\n' + configInstructions
-		: configInstructions;
+		? existingInstructions + '\n\n' + compactionInstructions
+		: compactionInstructions;
 
 	return {
 		...propsInfo,

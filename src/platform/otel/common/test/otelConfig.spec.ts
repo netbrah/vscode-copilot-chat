@@ -29,12 +29,11 @@ describe('resolveOTelConfig', () => {
 		expect(config.enabled).toBe(true);
 	});
 
-	it('enables when OTEL_EXPORTER_OTLP_ENDPOINT is set', () => {
+	it('does NOT auto-enable when OTEL_EXPORTER_OTLP_ENDPOINT is set without explicit opt-in', () => {
 		const config = resolveOTelConfig(makeInput({
 			env: { 'OTEL_EXPORTER_OTLP_ENDPOINT': 'http://collector:4318' },
 		}));
-		expect(config.enabled).toBe(true);
-		expect(config.otlpEndpoint).toBe('http://collector:4318/');
+		expect(config.enabled).toBe(false);
 	});
 
 	it('enables via VS Code setting', () => {

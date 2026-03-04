@@ -113,6 +113,19 @@ export const getAgentTools = async (accessor: ServicesAccessor, request: vscode.
 	}
 
 	allowTools[ToolName.EditFilesPlaceholder] = false;
+
+	// Hard-disable tools that are unused in this fork to reduce schema token tax
+	allowTools[ToolName.CreateNewWorkspace] = false;
+	allowTools[ToolName.CreateNewJupyterNotebook] = false;
+	allowTools[ToolName.EditNotebook] = false;
+	allowTools[ToolName.RunNotebookCell] = false;
+	allowTools[ToolName.GetNotebookSummary] = false;
+	allowTools[ToolName.ReadCellOutput] = false;
+	allowTools[ToolName.InstallExtension] = false;
+	allowTools[ToolName.SearchViewResults] = false;
+	allowTools[ToolName.ToolReplay] = false;
+	allowTools[ToolName.SwitchAgent] = false;
+
 	// todo@connor4312: string check here is for back-compat for 1.109 Insiders
 	if (Iterable.some(request.tools, ([t, enabled]) => (typeof t === 'string' ? t : t.name) === ContributedToolName.EditFilesPlaceholder && enabled === false)) {
 		allowTools[ToolName.ApplyPatch] = false;

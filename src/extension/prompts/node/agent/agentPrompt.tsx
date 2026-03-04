@@ -75,7 +75,7 @@ export interface AgentPromptProps extends GenericBasePromptElementProps {
 }
 
 /** Proportion of the prompt token budget any singular textual tool result is allowed to use. */
-const MAX_TOOL_RESPONSE_PCT = 0.5;
+const MAX_TOOL_RESPONSE_PCT = 0.35;
 
 /**
  * The agent mode prompt, rendered on each request

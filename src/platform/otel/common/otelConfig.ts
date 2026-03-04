@@ -87,9 +87,10 @@ export function resolveOTelConfig(input: OTelConfigInput): OTelConfig {
 	}
 
 	// Determine if enabled: env > setting > default(false)
+	// Explicit opt-in only — do NOT auto-enable from OTEL_EXPORTER_OTLP_ENDPOINT
 	const enabled = envBool(env['COPILOT_OTEL_ENABLED'])
 		?? input.settingEnabled
-		?? (!!env['OTEL_EXPORTER_OTLP_ENDPOINT']);
+		?? false;
 
 	if (!enabled) {
 		return createDisabledConfig(input);
