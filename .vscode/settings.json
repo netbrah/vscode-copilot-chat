@@ -1,25 +1,8 @@
 {
     "extensions.experimental.allowProposedApi": true,
 	"files.trimTrailingWhitespace": true,
-	"[typescript]": {
+	"[typescript][typescriptreact][javascript]": {
 		"editor.insertSpaces": false,
-		"editor.defaultFormatter": "vscode.typescript-language-features",
-		"editor.formatOnSave": true,
-		"editor.codeActionsOnSave": {
-			"source.organizeImports": "always"
-		}
-	},
-	"[typescriptreact]": {
-		"editor.insertSpaces": false,
-		"editor.defaultFormatter": "vscode.typescript-language-features",
-		"editor.formatOnSave": true,
-		"editor.codeActionsOnSave": {
-			"source.organizeImports": "always"
-		}
-	},
-	"[javascript]": {
-		"editor.insertSpaces": false,
-		"editor.defaultFormatter": "vscode.typescript-language-features",
 		"editor.formatOnSave": true,
 		"editor.codeActionsOnSave": {
 			"source.organizeImports": "always"
@@ -167,5 +150,10 @@
 			"icon": "sparkle",
 			"overrideName": true
 		}
+	},
+	"chat.agentSkillsLocations": {
+		".github/skills/.local": true,
+		".agents/skills/.local": true,
+		".claude/skills/.local": true,
 	}
 }
