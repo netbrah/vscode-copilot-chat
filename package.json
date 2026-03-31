@@ -4778,7 +4778,7 @@
 							"experimental"
 						]
 					},
-					"github.copilot.chat.advanced.injectContextBudgetMetadata": {
+					"github.copilot.chat.injectContextBudgetMetadata": {
 						"type": "boolean",
 						"default": true,
 						"markdownDescription": "%github.copilot.config.injectContextBudgetMetadata%",

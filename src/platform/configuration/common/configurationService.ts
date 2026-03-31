@@ -627,7 +627,7 @@ export namespace ConfigKey {
 		 * ratio, summarization state). Useful for model self-awareness of context
 		 * pressure and debugging prompt budget issues.
 		 */
-		export const InjectContextBudgetMetadata = defineSetting<boolean>('chat.advanced.injectContextBudgetMetadata', ConfigType.Simple, true);
+		export const InjectContextBudgetMetadata = defineAndMigrateSetting<boolean>('chat.advanced.injectContextBudgetMetadata', 'chat.injectContextBudgetMetadata', true);
 
 		/**
 		 * Custom instructions appended to the summarization prompt.

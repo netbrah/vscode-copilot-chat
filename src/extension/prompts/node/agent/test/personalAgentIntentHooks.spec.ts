@@ -206,14 +206,16 @@ describe('injectContextBudgetMetadata', () => {
 // ─── mergeCompactionInstructions ──────────────────────────────────────────────
 
 describe('mergeCompactionInstructions', () => {
-	it('returns propsInfo unchanged when no custom instructions configured', () => {
+	it('merges default compaction instructions when no custom instructions configured', () => {
 		const config = mockConfigService();
 		const propsInfo = makeMinimalPropsInfo('existing instructions');
 
 		const result = mergeCompactionInstructions(config, propsInfo);
 
-		expect(result).toBe(propsInfo); // same reference, not a copy
-		expect(result.props.summarizationInstructions).toBe('existing instructions');
+		expect(result).not.toBe(propsInfo); // returns a new object with defaults merged
+		expect(result.props.summarizationInstructions).toContain('existing instructions');
+		// Default compaction instructions are always appended
+		expect(result.props.summarizationInstructions!.length).toBeGreaterThan('existing instructions'.length);
 	});
 
 	it('merges config instructions with existing instructions', () => {
